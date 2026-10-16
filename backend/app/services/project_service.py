@@ -143,7 +143,8 @@ async def set_requirement(db, org_id: str, workspace_id: str, requirement_id: st
     await _update_by_workspace(db, org_id, workspace_id, {"requirement_id": requirement_id})
 
 
-async def _latest_run(db, org_id: str, requirement_id: str | None) -> dict[str, Any] | None:
+async def latest_run(db, org_id: str, requirement_id: str | None) -> dict[str, Any] | None:
+    """Counts of the newest run for a requirement (None without one); read by the project view and the Jira write-back."""
     if not requirement_id:
         return None
     run = await db["test_runs"].find_one({"org_id": org_id, "requirement_id": requirement_id}, sort=[("created_at", -1)])
@@ -191,7 +192,7 @@ async def get(db, org_id: str, project_id: str) -> dict[str, Any] | None:
     if doc is None:
         return None
     project = _public(doc)
-    latest = await _latest_run(db, org_id, project.get("requirement_id"))
+    latest = await latest_run(db, org_id, project.get("requirement_id"))
     project["latest_run"] = latest
     project["stages"] = _stages(project, latest)
     return project
@@ -201,7 +202,7 @@ async def list_projects(db, org_id: str) -> list[dict[str, Any]]:
     out = []
     async for doc in db[COLLECTION].find({"org_id": org_id}).sort("updated_at", -1).limit(200):
         project = _public(doc)
-        latest = await _latest_run(db, org_id, project.get("requirement_id"))
+        latest = await latest_run(db, org_id, project.get("requirement_id"))
         project["latest_run"] = latest
         project["stages"] = _stages(project, latest)
         out.append(project)

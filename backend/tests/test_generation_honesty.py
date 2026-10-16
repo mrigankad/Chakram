@@ -160,34 +160,3 @@ def test_unused_llm_ranking_function_is_gone():
     assert not hasattr(ai_service, "prioritize_tests")
 
 
-def test_sprint_summary_is_given_run_counts_not_deployment_language():
-    from app.services.ai_service import sprint_summary_facts
-
-    report = {
-        "sprint_name": "Sprint 24",
-        "dora": {"deployment_frequency_per_week": 3, "change_failure_rate": 26.7,
-                 "total_ci_runs_14d": 5, "successful_runs_14d": 5},
-        "test_pass_rate": 73.3,
-        "ci_summary": {"total_runs": 30, "evaluated_runs": 30, "success_count": 22, "failure_count": 8, "cancelled_count": 0},
-        "stories_delivered": None,
-        "stories": [],
-        "errors": ["Jira: Jira is not configured."],
-    }
-    facts = sprint_summary_facts(report)
-    text = str(facts)
-    assert "deployment" not in text and "change_failure" not in text and "dora" not in text
-    assert facts["ci_workflow_runs"]["successful_workflow_runs_last_7_days"] == 3
-    assert facts["ci_workflow_runs"]["run_failure_rate_percent"] == 26.7
-    # Jira was not read: the section is absent, not a list of zeroes.
-    assert facts["jira_sprint"] is None
-    assert facts["sources_that_could_not_be_read"] == ["Jira: Jira is not configured."]
-
-
-def test_sprint_summary_facts_without_ci_data_has_no_ci_section():
-    from app.services.ai_service import sprint_summary_facts
-
-    facts = sprint_summary_facts({"sprint_name": "S", "stories_delivered": 2, "stories": [
-        {"key": "P-1", "summary": "Login", "status": "Done", "priority": "High", "description": "x" * 900},
-    ]})
-    assert facts["ci_workflow_runs"] is None
-    assert facts["jira_sprint"]["issues"] == [{"key": "P-1", "summary": "Login", "status": "Done", "priority": "High"}]

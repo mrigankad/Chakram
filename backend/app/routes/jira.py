@@ -1,16 +1,23 @@
-"""Jira proxy routes.
+"""Jira routes: two jobs, import stories as requirements and write results back.
 
+Reads: projects, stories of the active sprint, open bugs (an optional Release
+Gate signal). Writes: acceptance criteria and test results as issue comments.
 Jira not configured is a 503 and an LLM failure a 429/502, both from the
-app-level handlers (app.errors); nothing here re-wraps them.
+app-level handlers (app.errors); nothing here re-wraps them. Sprint analytics
+were retired (ADR-7).
 """
 import asyncio
+from datetime import datetime, timezone
 
+from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from app.auth.dependencies import get_current_org
+from app.database import get_db
 from app.models.organization import OrganizationOut
-from app.services import jira_service
-from app.services.ai_service import AIQuotaError, generate_acceptance_criteria
+from app.services import jira_service, project_service, requirement_service
+from app.services.ai_service import generate_acceptance_criteria
 
 router = APIRouter(prefix="/jira", tags=["Jira"])
 
@@ -91,38 +98,106 @@ async def analyze_manual_story(body: dict = Body(...), org: OrganizationOut = De
     return {"issue_key": "MANUAL-1", "story": story, "ai_analysis": result}
 
 
-@router.post("/analyze-sprint")
-async def analyze_sprint(body: dict = Body(...), org: OrganizationOut = Depends(get_current_org)):
-    """Fetch all stories in the active sprint and generate AC for each.
+# ── Import stories as requirements ─────────────────────────────────────────
 
-    Stories are analysed concurrently (bounded by the LLM concurrency limit). A
-    story whose analysis failed has `ai_analysis: null` and the reason in `error`;
-    `failed` counts them. If every story failed on the AI quota the response is 429.
+class ImportStoriesIn(BaseModel):
+    project: str = Field(..., min_length=1)
+    keys: list[str] = Field(..., min_length=1, max_length=20)
+
+
+def requirement_text(story: dict) -> str:
+    """The requirement a story becomes: key and summary on the first line, the description after."""
+    head = f"{story['key']}: {story.get('summary', '').strip()}"
+    desc = (story.get("description") or "").strip()
+    return f"{head}\n\n{desc}" if desc else head
+
+
+@router.post("/stories/import")
+async def import_stories(
+    body: ImportStoriesIn,
+    org: OrganizationOut = Depends(get_current_org),
+    db=Depends(get_db),
+):
+    """Create one requirement (with its generated test suite) per selected story.
+
+    A story already imported by this org is returned as `exists` with its requirement id.
+    Generation runs per story; a failure names the story and leaves the others intact.
     """
-    project = body.get("project")
-    if not project:
-        raise HTTPException(status_code=400, detail="project is required")
-    stories = await jira_service.get_sprint_stories(project, max_results=15)
-    if not stories:
-        return {"stories": [], "total": 0, "failed": 0}
+    wanted = list(dict.fromkeys(k.strip().upper() for k in body.keys if k.strip()))
+    stories = {s["key"]: s for s in await jira_service.get_sprint_stories(body.project, max_results=50)}
+    results: list[dict] = []
 
-    async def _analyse(story: dict) -> dict:
-        existing = [s for s in stories if s["key"] != story["key"]]
-        return await generate_acceptance_criteria(story, existing)
+    async def _one(key: str) -> dict:
+        story = stories.get(key)
+        if story is None:
+            return {"key": key, "status": "not_found", "error": f"{key} is not in the active sprint of {body.project}"}
+        existing = await db.requirements.find_one({"org_id": org.id, "jira_key": key}, {"_id": 1})
+        if existing is not None:
+            return {"key": key, "status": "exists", "requirement_id": str(existing["_id"])}
+        try:
+            created = await requirement_service.create_requirement(db, org.id, requirement_text(story))
+        except Exception as exc:  # noqa: BLE001 - reported per story, the others continue
+            return {"key": key, "status": "failed", "error": str(exc) or type(exc).__name__}
+        await db.requirements.update_one(
+            {"_id": ObjectId(created["id"])},
+            {"$set": {"source": "jira", "jira_key": key, "jira_project": body.project, "jira_summary": story.get("summary", "")}},
+        )
+        return {"key": key, "status": "created", "requirement_id": created["id"], "total_tests": created.get("total_tests", 0)}
 
-    outcomes = await asyncio.gather(*(_analyse(s) for s in stories), return_exceptions=True)
-    failures = [o for o in outcomes if isinstance(o, BaseException)]
-    if failures and len(failures) == len(stories) and all(isinstance(f, AIQuotaError) for f in failures):
-        raise failures[0]
+    for outcome in await asyncio.gather(*(_one(k) for k in wanted)):
+        results.append(outcome)
+    return {
+        "results": results,
+        "created": sum(1 for r in results if r["status"] == "created"),
+        "failed": sum(1 for r in results if r["status"] in ("failed", "not_found")),
+    }
 
-    results = []
-    for story, outcome in zip(stories, outcomes):
-        if isinstance(outcome, BaseException):
-            results.append({
-                "story": story,
-                "ai_analysis": None,
-                "error": f"AI analysis failed: {str(outcome)[:300] or type(outcome).__name__}",
-            })
-        else:
-            results.append({"story": story, "ai_analysis": outcome})
-    return {"stories": results, "total": len(results), "failed": len(failures)}
+
+# ── Write results back ──────────────────────────────────────────────────────
+
+class PostResultsIn(BaseModel):
+    requirement_id: str = Field(..., min_length=1)
+
+
+def results_comment(requirement: dict, run: dict) -> str:
+    """The comment Chakram leaves on the story after a browser run."""
+    executed = run["passed"] + run["failed"]
+    rate = f"{round(run['pass_rate'] * 100)}%" if run.get("pass_rate") is not None else "no checkable case"
+    when = run.get("completed_at") or run.get("created_at")
+    when_text = when.strftime("%Y-%m-%d %H:%M UTC") if isinstance(when, datetime) else str(when or "")
+    lines = [
+        f"Chakram test results ({when_text})",
+        f"{run['passed']} passed, {run['failed']} failed, {run['skipped']} skipped. Pass rate {rate} of {executed} executed.",
+    ]
+    if run.get("target_url"):
+        lines.append(f"Target: {run['target_url']}")
+    lines.append(f"Run {run['run_id']} for requirement {requirement.get('jira_key') or str(requirement['_id'])}.")
+    if run["failed"]:
+        lines.append("Failed cases are listed in Chakram's Test Execution page for this run.")
+    return "\n".join(lines)
+
+
+@router.post("/stories/{issue_key}/post-results")
+async def post_results_to_jira(
+    issue_key: str,
+    body: PostResultsIn,
+    org: OrganizationOut = Depends(get_current_org),
+    db=Depends(get_db),
+):
+    """Comment the requirement's latest test run on the story. 409 when nothing has run."""
+    try:
+        requirement = await db.requirements.find_one({"_id": ObjectId(body.requirement_id), "org_id": org.id})
+    except Exception:  # noqa: BLE001 - not an ObjectId
+        requirement = None
+    if requirement is None:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    run = await project_service.latest_run(db, org.id, body.requirement_id)
+    if run is None or run["passed"] + run["failed"] + run["skipped"] == 0:
+        raise HTTPException(status_code=409, detail="No test run for this requirement yet. Run it on Test Execution first.")
+    text = results_comment(requirement, run)
+    comment = await jira_service.add_issue_comment(issue_key, text)
+    await db.requirements.update_one(
+        {"_id": requirement["_id"]},
+        {"$set": {"jira_results": {"issue_key": issue_key, "run_id": run["run_id"], "comment_id": comment["id"], "posted_at": datetime.now(timezone.utc)}}},
+    )
+    return {"status": "commented", "issue_key": issue_key, "comment_id": comment["id"], "run": {k: v for k, v in run.items() if k not in ("created_at", "completed_at")}, "comment": text}

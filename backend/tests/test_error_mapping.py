@@ -1,5 +1,4 @@
 """Typed service errors reach the client with the right status, from the app-level handlers."""
-import asyncio
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -78,7 +77,7 @@ async def test_jira_not_configured_is_503_with_what_to_do(client):
             resp = await client.get(path)
             assert resp.status_code == 503, path
             assert "Settings" in resp.json()["detail"]
-        resp = await client.post("/api/jira/analyze-sprint", json={"project": "P"})
+        resp = await client.post("/api/jira/stories/import", json={"project": "P", "keys": ["P-1"]})
         assert resp.status_code == 503
 
 
@@ -108,42 +107,6 @@ async def test_bad_ids_are_404_not_500(client):
     assert (await client.delete("/api/copilot/snippets/not-an-object-id")).status_code == 404
     resp = await client.post("/api/synthetic-data/preview", json={"requirement_id": "nope", "count": 5})
     assert resp.status_code == 404
-
-
-# ── sprint story analysis ─────────────────────────────────────────────────
-
-async def test_sprint_stories_are_analysed_concurrently_and_failures_carry_their_reason(client):
-    in_flight = {"now": 0, "peak": 0}
-
-    async def analyse(story, existing):
-        in_flight["now"] += 1
-        in_flight["peak"] = max(in_flight["peak"], in_flight["now"])
-        await asyncio.sleep(0.02)
-        in_flight["now"] -= 1
-        if story["key"] == "P-2":
-            raise ai_service.AIResponseError("The AI model did not return valid JSON")
-        return {"risk_score": 40, "story": story["key"], "others": len(existing)}
-
-    with patch("app.routes.jira.jira_service.get_sprint_stories", new=AsyncMock(return_value=STORIES)), \
-         patch("app.routes.jira.generate_acceptance_criteria", new=analyse):
-        resp = await client.post("/api/jira/analyze-sprint", json={"project": "P"})
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert in_flight["peak"] > 1
-    assert [s["story"]["key"] for s in body["stories"]] == [s["key"] for s in STORIES]  # order kept
-    assert (body["total"], body["failed"]) == (5, 1)
-    failed = body["stories"][1]
-    assert failed["ai_analysis"] is None and "did not return valid JSON" in failed["error"]
-    assert body["stories"][0]["ai_analysis"] == {"risk_score": 40, "story": "P-1", "others": 4}
-
-
-async def test_sprint_analysis_is_429_when_every_story_hit_the_quota(client):
-    with patch("app.routes.jira.jira_service.get_sprint_stories", new=AsyncMock(return_value=STORIES)), \
-         patch("app.routes.jira.generate_acceptance_criteria",
-               new=AsyncMock(side_effect=ai_service.AIQuotaError("rate limited"))):
-        resp = await client.post("/api/jira/analyze-sprint", json={"project": "P"})
-    assert resp.status_code == 429
 
 
 async def test_rejected_jira_bug_query_is_an_error_not_zero_open_bugs():

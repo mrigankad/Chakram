@@ -54,7 +54,7 @@ Trust notes: generated App Studio code never executes on the server; it is compi
 | Verification service | `services/execution_service.py` (+ `test_plans` cache), `playwright_service.py` (second engine), `test_case_service.py`, `prioritization_service.py`, `dashboard_service.py`, `root_cause_service.py`, `healing_service.py`, `test_selection_service.py` | two engines |
 | Release service | `services/vercel_service.py`, `routes/deployments.py`, `routes/release_gate.py`, `routes/pipeline.py` | Vercel only |
 | Template / design | `services/template_service.py` (37-file template, Mongo `Templates` override), `engines/kit.py`, `templates/chronos_kit/**`, `services/marks_service.py` + `templates/marks_manifest.json` (920 icons) | the owner's templatization base |
-| Other | `routes/{prd,cost_logs,activity,webhooks,monitoring,incidents,sprint,ci_intelligence,defect_prediction,impact,test_gen,coverage,copilot,synthetic_data,requirements,test_cases,test_execution,prioritization,dashboard,repo_analysis,baseline,test_selection,root_cause,healing}.py` | see `FEATURE_MATRIX.md` |
+| Other | `routes/{prd,cost_logs,activity,webhooks,monitoring,incidents,ci_intelligence,defect_prediction,impact,test_gen,coverage,copilot,synthetic_data,requirements,test_cases,test_execution,prioritization,dashboard,repo_analysis,baseline,test_selection,root_cause,healing}.py` | see `FEATURE_MATRIX.md` |
 
 ## 4. Collections (who writes, who reads)
 

@@ -22,7 +22,6 @@ const Incidents = lazy(() => import("./pages/Incidents"));
 const Monitoring = lazy(() => import("./pages/Monitoring"));
 const ReleaseGate = lazy(() => import("./pages/ReleaseGate"));
 const RequirementsIntelligence = lazy(() => import("./pages/RequirementsIntelligence"));
-const SprintIntelligence = lazy(() => import("./pages/SprintIntelligence"));
 const Workspace = lazy(() => import("./pages/Workspace"));
 const SDLCPipeline = lazy(() => import("./pages/SDLCPipeline"));
 const CodeImpact = lazy(() => import("./pages/CodeImpact"));
@@ -87,7 +86,6 @@ function App() {
             <Route path="/monitoring" element={<Monitoring />} />
             <Route path="/release-gate" element={<ReleaseGate />} />
             <Route path="/requirements-intelligence" element={<RequirementsIntelligence />} />
-            <Route path="/sprint-intelligence" element={<SprintIntelligence />} />
             <Route path="/workspace" element={<Workspace />} />
             <Route path="/pipeline" element={<SDLCPipeline />} />
             <Route path="/deployments" element={<Deployments />} />

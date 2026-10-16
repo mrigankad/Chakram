@@ -70,26 +70,23 @@ async def test_all_pages_report_the_same_pass_rate_from_one_github_request(app_c
     with patch(GET_RUNS, new=fetch), \
          patch("app.routes.release_gate.analyze_release_readiness", new=quiet_ai), \
          patch("app.routes.pipeline.analyze_release_readiness", new=quiet_ai), \
-         patch("app.routes.release_gate.slack_service.send_release_blocked", new=AsyncMock()), \
-         patch("app.routes.sprint.generate_sprint_summary", new=AsyncMock(return_value="summary")):
+         patch("app.routes.release_gate.slack_service.send_release_blocked", new=AsyncMock()):
         health = (await app_client.get("/api/ci/health", params={"owner": "o", "repo": "r"})).json()
         gate = (await app_client.post("/api/release-gate/evaluate", json={"owner": "o", "repo": "r"})).json()
         pipeline = (await app_client.post("/api/pipeline/report", json={"owner": "o", "repo": "r"})).json()
-        sprint = (await app_client.post("/api/sprint/report", json={"owner": "o", "repo": "r"})).json()
         proxied = (await app_client.get("/api/github/workflow-runs", params={"owner": "o", "repo": "r"})).json()
 
     expected = round(8 / 11 * 100, 1)
     assert health["summary"]["success_rate"] == expected
     assert gate["signals"]["test_pass_rate"] == expected
     assert pipeline["signals"]["ci_pass_rate"] == expected
-    assert sprint["test_pass_rate"] == expected
-    assert health["summary"]["failure_rate"] == sprint["dora"]["change_failure_rate"] == round(3 / 11 * 100, 1)
+    assert health["summary"]["failure_rate"] == round(3 / 11 * 100, 1)
     assert gate["signals"]["workflow_summary"] == pipeline["signals"]["workflow_summary"] == {
         "total_runs": 12, "recent_evaluated": 11,
     }
     assert len(proxied) == 12
 
-    assert fetch.await_count == 1  # five page loads, one GitHub request
+    assert fetch.await_count == 1  # four page loads, one GitHub request
     assert health["cache"]["cached"] is False and gate["cache"]["cached"] is True
 
 
@@ -156,12 +153,10 @@ def test_rate_limit_response_becomes_a_typed_error_with_the_reset_time():
 @pytest.mark.parametrize("method,path,payload", [
     ("GET", "/api/ci/health", None),
     ("GET", "/api/ci/flaky-tests", None),
-    ("GET", "/api/sprint/dora", None),
     ("GET", "/api/defect-prediction/risk-scores", None),
     ("GET", "/api/github/commits", None),
     ("POST", "/api/release-gate/evaluate", {"owner": "o", "repo": "r"}),
     ("POST", "/api/pipeline/report", {"owner": "o", "repo": "r"}),
-    ("POST", "/api/sprint/report", {"owner": "o", "repo": "r"}),
 ])
 async def test_github_rate_limit_is_a_429_with_the_reset_time(app_client, db, method, path, payload):
     await _login(app_client, db)

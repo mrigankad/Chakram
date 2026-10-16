@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAnalyzeRequirement } from "@/hooks/use-requirements";
+import { useOrgConnectors } from "@/hooks/use-org-connectors";
+import { configuredConnectors } from "@/lib/nav-config";
+import { JiraImportDialog } from "@/components/requirements/JiraImportDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { Panel } from "@/components/imcc/Panel";
@@ -16,6 +19,10 @@ const Requirements = () => {
   const navigate = useNavigate();
   const analyzeMutation = useAnalyzeRequirement();
   const isAnalyzing = analyzeMutation.isPending;
+  // Import from Jira shows only when the connector is configured (the same gate as the sidebar).
+  const { data: connectors } = useOrgConnectors();
+  const jiraConfigured = useMemo(() => configuredConnectors(connectors).has("jira"), [connectors]);
+  const [importOpen, setImportOpen] = useState(false);
 
   const handleGenerate = async () => {
     if (!requirement.trim()) return;
@@ -36,7 +43,16 @@ const Requirements = () => {
       <PageHeader
         title="Requirements"
         description="Describe a requirement in plain language. The model returns a test suite grouped into functional, edge, API, failure and regression cases."
+        actions={
+          jiraConfigured ? (
+            <Button variant="outline" onClick={() => setImportOpen(true)} className="gap-2">
+              <Download className="h-4 w-4" />
+              Import from Jira
+            </Button>
+          ) : undefined
+        }
       />
+      {jiraConfigured && <JiraImportDialog open={importOpen} onOpenChange={setImportOpen} />}
 
       <Panel>
         <div className="space-y-4">

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Play, RotateCcw } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2, Play, RotateCcw, Upload } from "lucide-react";
+import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -182,6 +183,32 @@ const RUN_COLUMNS: DataTableColumn<RunSummary>[] = [
   },
 ];
 
+/** Comments the finished run on the Jira story the requirement came from (`POST /jira/stories/{key}/post-results`). */
+function PostResultsToJira({ issueKey, requirementId, runId }: { issueKey: string; requirementId: string; runId: string }) {
+  const queryClient = useQueryClient();
+  const post = useMutation({
+    mutationFn: () => api.postJiraResults(issueKey, requirementId),
+    onSuccess: () => {
+      toast.success(`Results posted to ${issueKey}`, { description: "The run summary is a comment on the story." });
+      void queryClient.invalidateQueries({ queryKey: ["requirements"] });
+    },
+    onError: (err: unknown) => toast.error("Results were not posted", { description: apiErrorMessage(err, "Check the Jira connection under Settings → Connectors.") }),
+  });
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="gap-1.5"
+      onClick={() => post.mutate()}
+      disabled={post.isPending || !runId}
+      title={`Adds this run's counts as a comment on ${issueKey}`}
+    >
+      {post.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+      Post results to {issueKey}
+    </Button>
+  );
+}
+
 const TestExecution = () => {
   const requirementsQuery = useQuery({ queryKey: ["requirements"], queryFn: api.listRequirements });
   const requirements = useMemo(
@@ -228,6 +255,7 @@ const TestExecution = () => {
   const refetchHistory = historyQuery.refetch;
   const refetchResults = resultsQuery.refetch;
   const runStatus = summary?.status;
+  const jiraKey = requirements.find((r) => r.id === requirementId)?.jira_key ?? null;
   const wasRunning = useRef(false);
   useEffect(() => {
     if (runStatus === "running") {
@@ -409,6 +437,12 @@ const TestExecution = () => {
               </div>
             )}
           </Panel>
+
+          {jiraKey && runId && !running && (
+            <div className="flex justify-end">
+              <PostResultsToJira issueKey={jiraKey} requirementId={requirementId} runId={runId} />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <KpiStat

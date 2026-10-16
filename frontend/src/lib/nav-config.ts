@@ -4,7 +4,6 @@ import {
   ArrowUpDown,
   BrainCircuit,
   Bug,
-  CalendarCheck,
   ClipboardCheck,
   Coins,
   Database,
@@ -142,13 +141,6 @@ export const platformSections: NavSection[] = [
     items: [
       { title: "Deployments", url: "/deployments", icon: Rocket, hint: "Vercel deploy tracking" },
       { title: "CI Health", url: "/ci-intelligence", icon: Server, hint: "Workflow run health", requires: ["github"] },
-      {
-        title: "Sprint Health",
-        url: "/sprint-intelligence",
-        icon: CalendarCheck,
-        hint: "Sprint risk and delivery signals",
-        requires: ["jira"],
-      },
       { title: "Release Gate", url: "/release-gate", icon: ShieldCheck, hint: "Go / no-go decision", requires: ["jira"] },
       {
         title: "Incidents",

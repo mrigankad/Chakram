@@ -508,11 +508,15 @@
       "acceptance": [
         "CON 01"
       ],
-      "status": "todo",
+      "status": "done",
       "files": [
         "backend/app/routes/jira.py",
-        "backend/app/routes/sprint.py"
-      ]
+        "backend/app/routes/sprint.py (removed)",
+        "frontend/src/components/requirements/JiraImportDialog.tsx",
+        "frontend/src/pages/TestExecution.tsx",
+        "frontend/src/pages/RequirementsIntelligence.tsx"
+      ],
+      "notes": "Jira = import stories as requirements (POST /jira/stories/import) + write back AC and test results (POST /jira/stories/{key}/post-results). Sprint Health page, routes/sprint.py (report, DORA) and the sprint summary removed; /jira/analyze-sprint removed; Release Gate's Jira signal was already optional."
     }
   ]
 }

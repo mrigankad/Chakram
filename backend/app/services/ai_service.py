@@ -82,7 +82,6 @@ _TASK_LABELS: dict[str, str] = {
     "analyze_release_readiness": "Analyze Release Readiness",
     "investigate_incident": "Investigate Incident",
     "generate_incident_postmortem": "Generate Incident Post-mortem",
-    "generate_sprint_summary": "Generate Sprint Summary",
     "generate_acceptance_criteria": "Generate Acceptance Criteria",
     "generate_predictive_alert": "Generate Predictive Alert",
     "generate_playwright_tests_from_source": "Generate Playwright Tests (Source)",
@@ -1544,68 +1543,6 @@ Rules:
     if "## " not in text:
         raise AIResponseError("The post-mortem response did not contain the requested sections.")
     return text
-
-
-def sprint_summary_facts(sprint_report: dict) -> dict:
-    """The report as the model should read it: measured figures under names that say what they are.
-
-    The raw report keys are historical ("dora", "deployment_frequency_per_week",
-    "change_failure_rate") and invite a summary about deployments and change
-    failures that nothing here measures. They count GitHub Actions workflow runs.
-    """
-    dora = sprint_report.get("dora") or {}
-    ci = sprint_report.get("ci_summary") or {}
-    jira_read = "stories_delivered" in sprint_report and sprint_report.get("stories_delivered") is not None
-    facts: dict[str, Any] = {
-        "sprint_name": sprint_report.get("sprint_name"),
-        "ci_workflow_runs": {
-            "most_recent_runs_examined": ci.get("total_runs"),
-            "runs_that_finished_with_success_or_failure": ci.get("evaluated_runs"),
-            "successful_runs": ci.get("success_count"),
-            "failed_runs": ci.get("failure_count"),
-            "cancelled_runs": ci.get("cancelled_count"),
-            "run_pass_rate_percent": sprint_report.get("test_pass_rate"),
-            "run_failure_rate_percent": dora.get("change_failure_rate"),
-            "workflow_runs_last_14_days": dora.get("total_ci_runs_14d"),
-            "successful_workflow_runs_last_14_days": dora.get("successful_runs_14d"),
-            "successful_workflow_runs_last_7_days": dora.get("deployment_frequency_per_week"),
-        } if dora or ci else None,
-        "jira_sprint": {
-            "issues_in_sprint": sprint_report.get("stories_delivered"),
-            "issues_with_description_under_50_characters": sprint_report.get("ambiguous_stories_detected"),
-            "high_priority_issues": sprint_report.get("high_priority_stories"),
-            "issues": [
-                {k: s.get(k) for k in ("key", "summary", "status", "priority") if s.get(k) is not None}
-                for s in (sprint_report.get("stories") or [])[:20]
-            ],
-        } if jira_read else None,
-        "sources_that_could_not_be_read": sprint_report.get("errors") or [],
-    }
-    return facts
-
-
-async def generate_sprint_summary(sprint_report: dict) -> str:
-    """AI-written summary of the measured sprint figures. It may only restate what was measured."""
-    facts = sprint_summary_facts(sprint_report)
-    prompt = f"""You are writing a short status note for an engineering manager from measured data.
-
-DATA (JSON). A null value or a null section means that source was not read; it does not mean zero.
-{json.dumps(facts, indent=2, default=str)[:6000]}
-
-Rules:
-- Use only the figures in DATA. Do not add or estimate anything else.
-- The CI figures count GitHub Actions workflow runs. They are not deployments, releases,
-  change failures, production incidents or test coverage: never use those words for them.
-- If a section is null or a source is listed under sources_that_could_not_be_read, say in one
-  sentence that it was not available. Do not speculate about what it would have shown.
-- Reference issue keys only when they appear in DATA.
-
-Write three short paragraphs of plain text (no headings, no bullet points, no markdown):
-1. What the measured figures show.
-2. What needs attention, if the figures show anything that does.
-3. One or two concrete next steps that follow from the figures."""
-    raw = await _call_openai(prompt, json_mode=False)
-    return raw.strip()
 
 
 async def generate_acceptance_criteria(story: dict, existing_stories: list[dict]) -> dict[str, Any]:

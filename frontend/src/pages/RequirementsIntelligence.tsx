@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Loader2, Upload } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { apiErrorMessage } from "@/lib/api-error";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { DataTable, type DataTableColumn } from "@/components/imcc/DataTable";
-import { KpiStat, Panel } from "@/components/imcc/Panel";
+import { Panel } from "@/components/imcc/Panel";
 import { StatusBadge, type StatusTone } from "@/components/imcc/StatusBadge";
 import { cn } from "@/lib/utils";
 
@@ -224,67 +224,18 @@ function StoryCard({ item }: { item: StoryItem }) {
   );
 }
 
-const SPRINT_COLUMNS: DataTableColumn<StoryItem>[] = [
-  { id: "key", header: "Key", mono: true, width: "w-28", cell: (i) => i.story.key, sortValue: (i) => i.story.key },
-  {
-    id: "story",
-    header: "Story",
-    grow: true,
-    cell: (i) => (
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="min-w-0 truncate font-medium text-ink">{i.story.summary}</span>
-        {i.ai_analysis?.duplicate_of && <StatusBadge tone="neutral">Duplicate of {i.ai_analysis.duplicate_of}</StatusBadge>}
-      </span>
-    ),
-    title: (i) => i.story.summary,
-    sortValue: (i) => i.story.summary,
-  },
-  { id: "status", header: "Status", hideBelow: "md", cell: (i) => i.story.status ?? "", sortValue: (i) => i.story.status },
-  { id: "assignee", header: "Assignee", hideBelow: "lg", cell: (i) => i.story.assignee ?? "", sortValue: (i) => i.story.assignee },
+const STORY_COLUMNS: DataTableColumn<Story>[] = [
+  { id: "key", header: "Key", mono: true, width: "w-28", cell: (st) => st.key, sortValue: (st) => st.key },
+  { id: "story", header: "Story", grow: true, cell: (st) => <span className="font-medium text-ink">{st.summary}</span>, title: (st) => st.summary, sortValue: (st) => st.summary },
+  { id: "status", header: "Status", hideBelow: "md", cell: (st) => st.status ?? "", sortValue: (st) => st.status },
+  { id: "assignee", header: "Assignee", hideBelow: "lg", cell: (st) => st.assignee ?? "", sortValue: (st) => st.assignee },
   {
     id: "priority",
     header: "Priority",
     hideBelow: "sm",
     width: "w-28",
-    cell: (i) => (i.story.priority ? <StatusBadge tone={PRIORITY_TONE[i.story.priority] ?? "neutral"}>{i.story.priority}</StatusBadge> : ""),
-    sortValue: (i) => (i.story.priority ? (PRIORITY_RANK[i.story.priority] ?? 0) : null),
-  },
-  {
-    id: "scenarios",
-    header: "Scenarios",
-    align: "right",
-    hideBelow: "md",
-    width: "w-28",
-    cell: (i) => (i.ai_analysis ? (i.ai_analysis.acceptance_criteria?.length ?? 0) : "–"),
-    sortValue: (i) => (i.ai_analysis ? (i.ai_analysis.acceptance_criteria?.length ?? 0) : null),
-  },
-  {
-    id: "ambiguous",
-    header: "To clarify",
-    align: "right",
-    hideBelow: "md",
-    width: "w-28",
-    cell: (i) => (i.ai_analysis ? (i.ai_analysis.ambiguity_flags?.length ?? 0) : "–"),
-    sortValue: (i) => (i.ai_analysis ? (i.ai_analysis.ambiguity_flags?.length ?? 0) : null),
-  },
-  {
-    id: "risk",
-    header: "Risk",
-    align: "right",
-    width: "w-28",
-    cell: (i) => {
-      const risk = riskOf(i);
-      return risk === null ? "–" : <StatusBadge tone={riskTone(risk)}>{risk}/100</StatusBadge>;
-    },
-    sortValue: riskOf,
-  },
-  {
-    id: "push",
-    header: "",
-    label: "Push to Jira",
-    align: "right",
-    width: "w-36",
-    cell: (i) => (i.ai_analysis ? <PushToJiraButton item={i} /> : null),
+    cell: (st) => (st.priority ? <StatusBadge tone={PRIORITY_TONE[st.priority] ?? "neutral"}>{st.priority}</StatusBadge> : ""),
+    sortValue: (st) => (st.priority ? (PRIORITY_RANK[st.priority] ?? 0) : null),
   },
 ];
 
@@ -293,26 +244,32 @@ type Tab = "jira" | "manual";
 export default function RequirementsIntelligence() {
   const [tab, setTab] = useState<Tab>("manual");
 
-  // Jira mode state
+  // Jira mode state: one story at a time (sprint-wide analysis was retired with Sprint Health).
   const [projectKey, setProjectKey] = useState("");
+  const [loadedProject, setLoadedProject] = useState("");
+  const [storyKey, setStoryKey] = useState<string | null>(null);
 
   // Manual mode state
   const [manualSummary, setManualSummary] = useState("");
   const [manualDescription, setManualDescription] = useState("");
   const [manualPriority, setManualPriority] = useState("Medium");
 
-  const jiraMutation = useMutation({
-    mutationFn: () => api.analyzeSprintAC(projectKey),
+  const storiesQuery = useQuery({
+    queryKey: ["jira", "stories", loadedProject],
+    queryFn: () => api.getJiraStories(loadedProject),
+    enabled: !!loadedProject,
+    retry: false,
+  });
+  const storyMutation = useMutation({
+    mutationFn: (key: string) => api.generateStoryAC(key, loadedProject) as Promise<StoryItem>,
   });
 
   const manualMutation = useMutation({
     mutationFn: () => api.analyzeManualStory(manualSummary, manualDescription, manualPriority),
   });
 
-  const jiraData = jiraMutation.data as any;
-  const jiraItems: StoryItem[] = jiraData?.stories || [];
-  const ambiguousCount = jiraItems.filter((i) => (i.ai_analysis?.ambiguity_flags?.length || 0) > 0).length;
-  const highRiskCount = jiraItems.filter((i) => (riskOf(i) ?? 0) >= 70).length;
+  const stories: Story[] = storiesQuery.data ?? [];
+  const storyResult = storyMutation.data;
 
   const manualResult = manualMutation.data as StoryItem | undefined;
 
@@ -320,14 +277,14 @@ export default function RequirementsIntelligence() {
     <PageShell>
       <PageHeader
         title="Requirement Insights"
-        description="For a user story, the model writes Given/When/Then acceptance criteria, lists vague terms to clarify, and gives a 0–100 risk score. Analyse one story you paste, or every story in the active Jira sprint."
+        description="For a user story, the model writes Given/When/Then acceptance criteria, lists vague terms to clarify, and gives a 0–100 risk score. Paste a story, or pick one from the active Jira sprint and post the criteria back to it."
         actions={
           <>
             <button type="button" onClick={() => setTab("manual")} aria-pressed={tab === "manual"} className={cn(pill, tab === "manual" ? pillOn : pillOff)}>
               Single story
             </button>
             <button type="button" onClick={() => setTab("jira")} aria-pressed={tab === "jira"} className={cn(pill, tab === "jira" ? pillOn : pillOff)}>
-              Jira sprint
+              Jira story
             </button>
           </>
         }
@@ -407,11 +364,11 @@ export default function RequirementsIntelligence() {
                 onChange={(e) => setProjectKey(e.target.value.toUpperCase())}
                 placeholder="PROJ"
                 className="min-w-0 flex-1 uppercase"
-                onKeyDown={(e) => e.key === "Enter" && projectKey && jiraMutation.mutate()}
+                onKeyDown={(e) => e.key === "Enter" && projectKey && setLoadedProject(projectKey)}
               />
-              <Button onClick={() => jiraMutation.mutate()} disabled={!projectKey || jiraMutation.isPending} className="gap-2">
-                {jiraMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                {jiraMutation.isPending ? "Analysing" : "Analyse sprint"}
+              <Button onClick={() => setLoadedProject(projectKey)} disabled={!projectKey || storiesQuery.isFetching} className="gap-2">
+                {storiesQuery.isFetching && <Loader2 className="h-4 w-4 animate-spin" />}
+                {storiesQuery.isFetching ? "Loading" : "Load stories"}
               </Button>
             </div>
             <p className="mt-2 text-xs text-ink-tertiary">
@@ -420,41 +377,49 @@ export default function RequirementsIntelligence() {
               <Link to="/settings/connectors" className="text-ink-secondary underline underline-offset-2">
                 Settings → Connectors
               </Link>
-              .
+              . To turn stories into requirements with test suites, use Import from Jira on the Requirements page.
             </p>
-            {jiraMutation.isError && (
+            {storiesQuery.isError && (
               <p className="mt-3 text-sm text-destructive">
-                Could not read the sprint from Jira. Check the project key, the Jira connection, and that the project has an
-                active sprint. The Single story tab works without Jira.
+                {apiErrorMessage(storiesQuery.error, "Could not read the sprint from Jira. Check the project key and the Jira connection.")}
               </p>
             )}
           </Panel>
 
-          {jiraData && (
-            <>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <KpiStat mark="mark-requirements-intelligence" label="Stories analysed" value={jiraData.total} />
-                <KpiStat mark="mark-doc-tests"
-                  label="Scenarios written"
-                  value={jiraItems.reduce((acc, i) => acc + (i.ai_analysis?.acceptance_criteria?.length || 0), 0)}
-                />
-                <KpiStat mark="mark-empty-not-found" label="With ambiguous terms" value={ambiguousCount} />
-                <KpiStat mark="mark-kpi-high-priority" label="Risk 70 or higher" value={highRiskCount} />
-              </div>
-
-              <DataTable
-                caption={`Sprint stories (${jiraItems.length})`}
-                columns={SPRINT_COLUMNS}
-                rows={jiraItems}
-                rowKey={(i) => i.story.key}
-                renderExpanded={(i) => <StoryAnalysisDetail item={i} />}
-                searchText={(i) => `${i.story.key} ${i.story.summary} ${i.story.status ?? ""} ${i.story.assignee ?? ""} ${i.story.priority ?? ""}`}
-                searchPlaceholder="Filter stories"
-                pageSize={25}
-                empty="No stories found in the active sprint for this project."
-              />
-            </>
+          {loadedProject && !storiesQuery.isError && (
+            <DataTable
+              caption={`Sprint stories (${stories.length})`}
+              columns={STORY_COLUMNS}
+              rows={stories}
+              rowKey={(st) => st.key}
+              searchText={(st) => `${st.key} ${st.summary} ${st.status ?? ""} ${st.assignee ?? ""} ${st.priority ?? ""}`}
+              searchPlaceholder="Filter stories"
+              pageSize={25}
+              empty={storiesQuery.isLoading ? "Loading stories…" : "No stories found in the active sprint for this project."}
+              renderExpanded={(st) => (
+                <div className="space-y-3">
+                  {st.description ? <p className="whitespace-pre-wrap text-xs text-ink-secondary">{st.description}</p> : <p className="text-xs text-ink-quaternary">No description on the story.</p>}
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setStoryKey(st.key);
+                      storyMutation.mutate(st.key);
+                    }}
+                    disabled={storyMutation.isPending && storyKey === st.key}
+                    className="gap-2"
+                  >
+                    {storyMutation.isPending && storyKey === st.key && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Generate acceptance criteria
+                  </Button>
+                </div>
+              )}
+            />
           )}
+
+          {storyMutation.isError && (
+            <p className="text-sm text-destructive">{apiErrorMessage(storyMutation.error, "Generation failed. Check that the AI provider is configured and reachable.")}</p>
+          )}
+          {storyResult && !storyMutation.isPending && <StoryCard item={storyResult} />}
         </>
       )}
     </PageShell>

@@ -71,7 +71,7 @@ Columns: inputs a user must supply before the page shows anything; what feeds it
 | Page | Route | Why | Disposition |
 | --- | --- | --- | --- |
 | CI Health | `/ci-intelligence` | GitHub Actions only; duplicates `/github/workflow-runs/*/explain`; DORA computed in three places | Park until a repo is connected; remove the duplicate endpoint |
-| Sprint Health | `/sprint-intelligence` | Jira + GitHub; Jira unconfigured; overlaps CI Health and Release Gate | Park; candidate to Cut |
+| Sprint Health | `/sprint-intelligence` | Jira + GitHub; Jira unconfigured; overlaps CI Health and Release Gate | Removed (T-140): page, `routes/sprint.py` and the sprint summary are gone |
 | Release Gate | `/release-gate` | needs CI + Jira; Pipeline already imports its scoring | Park; Merge scoring into Pipeline report |
 | Incidents | `/incidents` | real storage, but fed by demo Monitoring in practice | Park until Monitoring has a real source |
 | Metric Anomalies | `/monitoring` | **Demo-only**: seeded random series (`monitoring.py:153-212`), Demo tab default, no stored series, Datadog read unused | **Cut** from the sidebar now; keep the z-score/projection functions for when a real series exists |
@@ -84,7 +84,7 @@ Columns: inputs a user must supply before the page shows anything; what feeds it
 | `coverage.py` | AST cross-reference, no LLM; marginal | Keep (cheap) |
 | `test_gen.py` | fifth test generator, own store `workspace_test_suites` | Merge generation into one service (Phase 0/V) |
 | `github.py` `/workflow-runs/{id}/explain` | identical to `/ci/runs/{id}/explain` | Cut one |
-| `sprint.py /dora`, `jira.py` AC generation, 15 `api.ts` methods, 4 `use-impact` hooks | never called from the UI | Cut |
+| `jira.py` AC generation, 15 `api.ts` methods, 4 `use-impact` hooks | never called from the UI (`sprint.py /dora` removed in T-140) | Cut |
 | `monitoring.py /simulate-time-series` | demo generator | Cut with the page |
 | `webhooks.py` | WorkOS only; 503 otherwise | Keep (dormant) |
 

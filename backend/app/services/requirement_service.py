@@ -78,6 +78,9 @@ async def list_requirements(
             created_at=d["created_at"],
             status=d["status"],
             error=d.get("error"),
+            source=d.get("source"),
+            jira_key=d.get("jira_key"),
+            jira_results_posted_at=(d.get("jira_results") or {}).get("posted_at"),
         )
         for d in docs
     ]

@@ -141,3 +141,16 @@ Checks: backend 680 passed / 1 skipped; frontend tsc clean, 540 vitest passed, b
 **Not done**: Chakram's logo and name are not taken from the pack (white-label is a separate decision); the bridge's HSL aliases remain for the few `hsl(var(--border))` consumers in TSX (they stay Chronos grey under a pack).
 
 **Next task:** T-140 (Jira narrowed to story import and write-back; Sprint Health retired).
+
+## 2026-10-16 — Jira narrowed, Sprint Health retired (T-140 done)
+
+Checks: backend 678 passed / 1 skipped (4 new in `tests/test_jira_narrowed.py`); frontend tsc clean, 540 vitest passed, build passed. Rendered against a stubbed API: Requirements → Import from Jira (project select, story checklist, "Import 1") and Requirement Insights → Jira story (story table with per-story acceptance criteria).
+
+- Jira now does two jobs. **Import**: `POST /jira/stories/import` turns selected sprint stories into requirements with generated test suites (key and summary on the first line, `source: jira`, `jira_key` on the record; a story already imported comes back as `exists`; a failed generation names the story and leaves the others intact). **Write back**: `POST /jira/stories/{key}/post-results` comments the requirement's latest run (passed/failed/skipped, pass rate, target URL, run id) on the story and records it on the requirement; 409 when nothing has run. Acceptance-criteria write-back stays as it was.
+- Removed: the Sprint Health page, `routes/sprint.py` (sprint report and DORA, both computed from GitHub data CI Health already shows), the sprint summary prompt, `/jira/analyze-sprint`, and their API client methods. Requirement Insights' Jira tab now lists the sprint's stories and generates criteria for one story at a time.
+- Requirements page: **Import from Jira** when the connector is configured. Test Execution: **Post results to <key>** after a run of a story-backed requirement. The connector registry's Jira feeds read "Import stories as requirements", "Acceptance criteria and test results written back", "Release gate: open bugs (optional)".
+- The Release Gate already scored without Jira (`jira_project` optional, `INSUFFICIENT_DATA` without CI); unchanged.
+
+**Not done**: a contract test against recorded Jira fixtures (ADR-7's "stays updated" rule) and OAuth; both wait for a project that needs them.
+
+**Next task:** T-080 (provider registry: Azure OpenAI and Gemini behind one `complete()` interface) or T-004/T-050 cleanup (Pipeline page retired in favour of the project view).

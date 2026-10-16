@@ -16,7 +16,7 @@ import {
   visibleSections,
 } from "./nav-config";
 
-const PARKED = ["/ci-intelligence", "/sprint-intelligence", "/release-gate", "/incidents"];
+const PARKED = ["/ci-intelligence", "/release-gate", "/incidents"];
 
 function urls(sections: ReturnType<typeof visibleSections>): string[] {
   return sections.flatMap((s) => s.items.map((i) => i.url));
@@ -33,14 +33,12 @@ describe("visibleSections", () => {
   it("shows CI Health with a GitHub token only", () => {
     const shown = urls(visibleSections(platformSections, new Set(["github"])));
     expect(shown).toContain("/ci-intelligence");
-    expect(shown).not.toContain("/sprint-intelligence");
     expect(shown).not.toContain("/release-gate");
     expect(shown).not.toContain("/incidents");
   });
 
   it("shows Sprint Health and Release Gate with Jira", () => {
     const shown = urls(visibleSections(platformSections, new Set(["jira"])));
-    expect(shown).toContain("/sprint-intelligence");
     expect(shown).toContain("/release-gate");
     expect(shown).not.toContain("/ci-intelligence");
   });
@@ -99,7 +97,6 @@ describe("breadcrumbs for hidden pages", () => {
 
   it("keeps the parked pages' labels whether or not they are shown", () => {
     expect(getBreadcrumbForPath("/release-gate")).toEqual({ section: "Release & Ops", page: "Release Gate" });
-    expect(getBreadcrumbForPath("/sprint-intelligence")).toEqual({ section: "Release & Ops", page: "Sprint Health" });
   });
 
   it("builds the detail trail for a root cause analysis", () => {

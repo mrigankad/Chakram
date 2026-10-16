@@ -40,7 +40,7 @@ from app.routes import (
     requirements, test_cases, test_execution, synthetic_data,
     prioritization, dashboard, repo_analysis,
     github, jira, ci_intelligence, defect_prediction, release_gate,
-    monitoring, incidents, sprint,
+    monitoring, incidents,
     workspace, copilot, git_ops, coverage, test_gen,
     pipeline, impact, commit, deployments, prd, cost_logs,
     root_cause, test_selection, healing,
@@ -240,7 +240,6 @@ app.include_router(defect_prediction.router, prefix=API_PREFIX)
 app.include_router(release_gate.router, prefix=API_PREFIX)
 app.include_router(monitoring.router, prefix=API_PREFIX)
 app.include_router(incidents.router, prefix=API_PREFIX)
-app.include_router(sprint.router, prefix=API_PREFIX)
 
 # AI Workspace routes
 app.include_router(workspace.router, prefix=API_PREFIX)

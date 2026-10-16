@@ -163,7 +163,7 @@ REGISTRY: dict[str, Connector] = {
     "jira": Connector(
         id="jira", name="Jira", kind="tracker",
         secret_fields=("token",), required=("domain", "email", "token"),
-        feeds=(Feed("requirements-import", "Requirements from stories"), Feed("release-gate", "Release gate (open bugs)"), Feed("jira-writeback", "Acceptance criteria write-back")),
+        feeds=(Feed("requirements-import", "Import stories as requirements"), Feed("jira-writeback", "Acceptance criteria and test results written back"), Feed("release-gate", "Release gate: open bugs (optional)")),
         api_version="REST v3",
         check=_check_jira,
         notes="Reads stories and bugs, writes acceptance criteria as comments. Sprint analytics were retired.",

@@ -38,7 +38,7 @@ AIDLC-main/
 │   │   │   ├── synthetic_data.py, prioritization.py, dashboard.py,
 │   │   │   ├── repo_analysis.py, github.py, jira.py, ci_intelligence.py,
 │   │   │   ├── defect_prediction.py, release_gate.py, monitoring.py,
-│   │   │   ├── incidents.py, sprint.py, workspace.py, copilot.py,
+│   │   │   ├── incidents.py, workspace.py, copilot.py,
 │   │   │   ├── git_ops.py, coverage.py, test_gen.py, pipeline.py,
 │   │   │   ├── impact.py, commit.py, deployments.py, prd.py,
 │   │   │   ├── cost_logs.py, ai_ide.py, baseline.py
@@ -65,7 +65,7 @@ AIDLC-main/
 `/prioritization`, `/live-testing` (`/live-test-runner` alias), `/code-review`,
 `/ci-intelligence`, `/defect-prediction`, `/generated-tests`, `/incidents`,
 `/monitoring`, `/release-gate`, `/requirements-intelligence`,
-`/sprint-intelligence`, `/workspace`, `/pipeline`, `/deployments`,
+`/workspace`, `/pipeline`, `/deployments`,
 `/code-impact`, `/doc-tests`, `/prd`, `/profile`, `/cost-tracker` (Usage & Cost), `/ai-ide`
 (App Studio), `/repo-baseline`, `/root-cause`, `/test-selection`, `/self-healing`,
 `/settings/connectors`, `/login`.
@@ -74,10 +74,11 @@ All of these routes stay reachable, but the sidebar (`frontend/src/lib/nav-confi
 shows only the streamlined set: Build & Code, Requirements & Planning, Testing &
 Quality, Release & Ops, plus Connectors and Usage & Cost in the footer. Test
 Baseline, Test Selection, Root Cause, Test Repair and Tests from Docs are tabs of
-Test Suite (`components/TestSuiteTabs.tsx`); CI Health, Sprint Health, Release Gate
-and Incidents are parked and appear only when the connector that feeds them
-(GitHub, Jira, Slack/Datadog) is configured; Code Impact, Requirement Insights and
-Metric Anomalies are reachable by URL and global search only.
+Test Suite (`components/TestSuiteTabs.tsx`); CI Health, Release Gate and Incidents
+are parked and appear only when the connector that feeds them (GitHub, Jira, Slack)
+is configured; Code Impact, Requirement Insights and Metric Anomalies are reachable
+by URL and global search only. Sprint Health was removed (its DORA figures came
+from GitHub and live in CI Health).
 
 Guided 4-step core workflow (sidebar "Beta / In Progress" group):
 Requirements → Test Suite → Test Execution → Risk Ranking, with Synthetic
@@ -264,7 +265,10 @@ org's default design pack restyles Chakram itself (`components/OrgDesignPack.tsx
 - `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_NAME` configured
 - `JIRA_DOMAIN` / `JIRA_EMAIL` / `JIRA_TOKEN` **not configured**. Jira
   endpoints return `503` with an actionable message (expected, not a bug);
-  Sprint/Release-Gate/Pipeline degrade gracefully and record it in `errors`.
+  Release Gate and Pipeline degrade gracefully and record it in `errors`. Jira does
+  two jobs: `POST /jira/stories/import` turns sprint stories into requirements
+  (Requirements → Import from Jira) and `POST /jira/stories/{key}/post-results`
+  comments a requirement's latest run on its story (Test Execution → Post results).
 - `SLACK_WEBHOOK_URL` not configured (Datadog was removed: nothing read it)
 
 `frontend/.env` exists, standard Vite env file.
@@ -273,8 +277,8 @@ org's default design pack restyles Chakram itself (`components/OrgDesignPack.tsx
 
 - (Fixed) `frontend/src/pages/SyntheticData.tsx` previously held 11 stray
   CP-1252 bytes that rendered as `�`; the file is valid UTF-8 now.
-- Breadcrumbs on some pages (e.g. CI Intelligence, Incidents, Sprint
-  Intelligence, Requirements Intelligence) show a generic "Chakram /" prefix
+- Breadcrumbs on some pages (e.g. CI Intelligence, Incidents,
+  Requirements Intelligence) show a generic "Chakram /" prefix
   instead of a proper category name cosmetic, auto-generated from route.
 - Several pages show a greyed-out/disabled "step" UI until a prior step in
   the workflow has data (e.g. Test Execution / Risk Ranking before any

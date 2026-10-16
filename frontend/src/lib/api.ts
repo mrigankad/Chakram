@@ -239,6 +239,28 @@ export interface Requirement {
   text: string;
   created_at: string;
   status: string;
+  /** "jira" when imported from a story, "app_studio" for Test this app; absent when typed by hand. */
+  source?: "jira" | "app_studio" | null;
+  jira_key?: string | null;
+  jira_results_posted_at?: string | null;
+}
+
+/** One Jira story as the backend normalises it. */
+export interface JiraStory {
+  key: string;
+  summary: string;
+  description: string;
+  status: string;
+  priority: string;
+  assignee: string;
+  issue_type: string;
+  labels: string[];
+}
+
+export interface JiraImportResult {
+  results: { key: string; status: "created" | "exists" | "failed" | "not_found"; requirement_id?: string; total_tests?: number; error?: string }[];
+  created: number;
+  failed: number;
 }
 
 export interface AnalyzeRequirementResult {
@@ -1499,10 +1521,16 @@ export const api = {
     apiClient.get("/jira/projects").then((r) => r.data as any[]),
 
   getJiraStories: (project: string) =>
-    apiClient.get("/jira/stories", { params: { project } }).then((r) => r.data as any[]),
+    apiClient.get<JiraStory[]>("/jira/stories", { params: { project } }).then((r) => r.data),
+  /** One requirement (with its generated suite) per selected story; stories already imported come back as `exists`. */
+  importJiraStories: (project: string, keys: string[]) =>
+    apiClient.post<JiraImportResult>("/jira/stories/import", { project, keys }).then((r) => r.data),
+  /** Comments the requirement's latest test run on the story; 409 when nothing has run yet. */
+  postJiraResults: (issueKey: string, requirementId: string) =>
+    apiClient
+      .post<{ status: string; issue_key: string; comment_id: string; comment: string }>(`/jira/stories/${encodeURIComponent(issueKey)}/post-results`, { requirement_id: requirementId })
+      .then((r) => r.data),
 
-  analyzeSprintAC: (project: string) =>
-    apiClient.post("/jira/analyze-sprint", { project }).then((r) => r.data),
 
   analyzeManualStory: (summary: string, description: string, priority: string) =>
     apiClient.post("/jira/analyze-manual", { summary, description, priority }).then((r) => r.data),
@@ -1658,13 +1686,6 @@ export const api = {
 
   generatePostmortem: (id: string) =>
     apiClient.post(`/incidents/${id}/postmortem`).then((r) => r.data),
-
-  // ── Sprint Intelligence ───────────────────────────────────────────────────
-  generateSprintReport: (params: { owner: string; repo: string; jira_project?: string; sprint_name?: string }) =>
-    apiClient.post("/sprint/report", params).then((r) => r.data),
-
-  getDORAMetrics: (owner: string, repo: string) =>
-    apiClient.get("/sprint/dora", { params: { owner, repo } }).then((r) => r.data),
 
   // ── AI Workspace ──────────────────────────────────────────────────────────
   connectWorkspace: (github_url: string, branch: string, pat?: string) =>

@@ -43,3 +43,6 @@ class RequirementOut(BaseModel):
     created_at: datetime
     status: str
     error: Optional[str] = None
+    source: Optional[str] = None  # "jira" | "app_studio" | None (typed by hand)
+    jira_key: Optional[str] = None
+    jira_results_posted_at: Optional[datetime] = None

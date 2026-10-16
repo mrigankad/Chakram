@@ -120,7 +120,6 @@ export const PAGE_MARKS: Partial<Record<string, MarkId>> = {
   "/prd": "mark-prd-generator",
   "/requirements": "mark-requirements",
   "/requirements-intelligence": "mark-requirements-intelligence",
-  "/sprint-intelligence": "mark-sprint-intelligence",
   "/synthetic-data": "mark-synthetic-data",
   "/repo-baseline": "mark-repo-baseline",
   "/doc-tests": "mark-doc-tests",
