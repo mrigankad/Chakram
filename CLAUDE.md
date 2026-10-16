@@ -21,8 +21,8 @@ leave them unless asked.
   Ollama-compatible LLM (local or Ollama Cloud) for all AI features. Dev
   server runs on port **8001** in development.
 - **Database**: MongoDB (run locally via Docker, or Atlas in production).
-- **AI provider**: Ollama either local (`http://localhost:11434`) or Ollama
-  Cloud (`https://ollama.com` with an API key, model e.g. `gpt-oss:120b`).
+- **AI provider**: Ollama (local `http://localhost:11434` or Ollama Cloud), OpenAI,
+  Azure OpenAI or Gemini, chosen per organization (`services/model_providers.py`).
 
 ## Repo layout
 
@@ -252,8 +252,11 @@ org's default design pack restyles Chakram itself (`components/OrgDesignPack.tsx
 
 `backend/.env` (already configured):
 - `MONGODB_URI`, `MONGODB_DB=aidlc`
-- `OLLAMA_BASE_URL` (`https://ollama.com` for Ollama Cloud), `OLLAMA_API_KEY`,
-  `OLLAMA_MODEL` (default `kimi-k3:cloud`)
+- `MODEL_PROVIDER` (`ollama` default, or `openai`, `azure_openai`, `gemini`),
+  `OLLAMA_BASE_URL` (`https://ollama.com` for Ollama Cloud; the resource endpoint for
+  Azure), `OLLAMA_API_KEY`, `OLLAMA_MODEL` (default `kimi-k3:cloud`; the deployment name
+  for Azure). An organization can save its own provider and key in Settings; see
+  `docs/chakram/MODEL_PROVIDERS.md` and `backend/app/services/model_providers.py`.
 - `APP_ENV` (`development` locally). With `APP_ENV=production` the app refuses to
   start unless `SESSION_SECRET` is 32+ random characters, sign-up is closed except
   for `SIGNUP_ALLOWED_DOMAINS` / `ALLOW_OPEN_SIGNUP`, and only orgs in

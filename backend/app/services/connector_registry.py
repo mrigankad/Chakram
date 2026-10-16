@@ -22,6 +22,7 @@ import httpx
 from bson import ObjectId
 
 from app.services import connector_settings_service as connectors
+from app.services import model_providers
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,8 @@ class Connector:
     api_version: str
     check: Callable[[dict[str, str]], Awaitable[tuple[bool, str]]]
     notes: str = ""
+    #: overrides the "required fields are set" rule when the fields depend on a choice (the model provider)
+    configured: Callable[[dict[str, str]], bool] | None = None
 
 
 class CheckResult(dict):
@@ -106,22 +109,12 @@ async def _check_vercel(cfg: dict[str, str]) -> tuple[bool, str]:
     return True, f"Token accepted for {user.get('username') or user.get('email') or 'the account'}."
 
 
-async def _check_ollama(cfg: dict[str, str]) -> tuple[bool, str]:
-    base = (cfg.get("base_url") or "").rstrip("/")
-    if not base:
-        return False, "A base URL is required."
-    headers = {"Authorization": f"Bearer {cfg['api_key']}"} if cfg.get("api_key") else {}
-    async with httpx.AsyncClient(timeout=CHECK_TIMEOUT) as client:
-        resp = await client.get(f"{base}/api/tags", headers=headers)
-    if resp.status_code in (401, 403):
-        return False, f"The model endpoint rejected the key ({resp.status_code})."
-    if resp.status_code >= 400:
-        return False, f"The model endpoint answered {resp.status_code}."
-    models = [m.get("name") for m in (resp.json() or {}).get("models") or [] if isinstance(m, dict)]
-    wanted = cfg.get("model") or ""
-    if wanted and models and not any(str(m).startswith(wanted.split(":")[0]) for m in models):
-        return True, f"Reachable, but '{wanted}' is not in the endpoint's model list ({len(models)} models)."
-    return True, f"Reachable; {len(models)} model(s) listed." if models else "Reachable."
+async def _check_model(cfg: dict[str, str]) -> tuple[bool, str]:
+    return await model_providers.check(model_providers.profile(cfg))
+
+
+def _model_configured(cfg: dict[str, str]) -> bool:
+    return model_providers.profile(cfg).is_configured
 
 
 async def _check_slack(cfg: dict[str, str]) -> tuple[bool, str]:
@@ -138,12 +131,13 @@ async def _check_slack(cfg: dict[str, str]) -> tuple[bool, str]:
 
 REGISTRY: dict[str, Connector] = {
     "ollama": Connector(
-        id="ollama", name="Model (Ollama)", kind="model",
+        id="ollama", name="Model provider", kind="model",
         secret_fields=("api_key",), required=("base_url",),
         feeds=(Feed("app-studio", "App Studio"), Feed("test-generation", "Test generation"), Feed("code-review", "Code review"), Feed("narratives", "AI summaries")),
-        api_version="Ollama OpenAI-compatible /v1",
-        check=_check_ollama,
-        notes="Shared with every organization; the product's own model.",
+        api_version="Ollama /v1 · OpenAI v1 · Azure OpenAI v1 · Gemini (google-genai)",
+        check=_check_model,
+        configured=_model_configured,
+        notes="Ollama, OpenAI, Azure OpenAI or Gemini; the server's provider is shared, an organization may save its own key.",
     ),
     "github": Connector(
         id="github", name="GitHub", kind="source",
@@ -181,6 +175,8 @@ ORDER = ("ollama", "github", "vercel", "jira", "slack")
 
 
 def is_configured(connector: Connector, cfg: dict[str, str]) -> bool:
+    if connector.configured is not None:
+        return connector.configured(cfg)
     required = connector.required or connector.secret_fields
     return all(bool(cfg.get(f)) for f in required)
 
@@ -217,6 +213,7 @@ async def status(db, org, raw: dict[str, Any] | None = None) -> list[dict[str, A
             "api_version": c.api_version,
             "notes": c.notes,
             "last_check": checks.get(cid),
+            **({"provider": model_providers.profile(cfg).provider, "model": model_providers.profile(cfg).model} if c.kind == "model" else {}),
         })
     return rows
 

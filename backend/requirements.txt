@@ -19,6 +19,7 @@ idna==3.11
 jiter==0.13.0
 motor==3.7.1
 openai==2.26.0
+google-genai==2.31.0
 openpyxl==3.1.5
 playwright==1.61.0
 pydantic==2.12.5

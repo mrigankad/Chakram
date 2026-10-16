@@ -80,6 +80,7 @@ def _env_defaults() -> dict[str, dict[str, str]]:
             "project_name": settings.VERCEL_PROJECT_NAME or "",
         },
         "ollama": {
+            "provider": settings.MODEL_PROVIDER or "ollama",
             "base_url": settings.OLLAMA_BASE_URL or "",
             "api_key": settings.OLLAMA_API_KEY or "",
             "model": settings.OLLAMA_MODEL or "",

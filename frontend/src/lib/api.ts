@@ -97,7 +97,24 @@ export interface ConnectorStatus {
   /** The service API version the backend pins. */
   api_version: string;
   last_check: ConnectorCheck | null;
+  /** Model connector only: the provider and model the organization resolves to. */
+  provider?: ModelProviderId;
+  model?: string;
 }
+
+export type ModelProviderId = "ollama" | "openai" | "azure_openai" | "gemini";
+
+/** One entry of GET /orgs/current/model-providers: how to render the provider's fields in Settings. */
+export interface ModelProviderSpec {
+  id: ModelProviderId;
+  name: string;
+  api_version: string;
+  fields: Partial<Record<"base_url" | "api_key" | "model", { label: string; placeholder: string }>>;
+  required: string[];
+  capabilities: Record<string, boolean>;
+}
+
+export const MODEL_PROVIDERS_QUERY_KEY = ["org", "model-providers"] as const;
 
 export const CONNECTOR_STATUS_QUERY_KEY = ["org", "connectors", "status"] as const;
 
@@ -1646,6 +1663,8 @@ export const api = {
     apiClient.put<ConnectorsPublic>("/orgs/current/connectors", body).then((r) => r.data),
   getConnectorStatus: () =>
     apiClient.get<{ connectors: ConnectorStatus[] }>("/orgs/current/connectors/status").then((r) => r.data.connectors),
+  getModelProviders: () =>
+    apiClient.get<{ providers: ModelProviderSpec[]; default: ModelProviderId }>("/orgs/current/model-providers").then((r) => r.data),
   /** The org's default design pack as custom properties; Chakram's UI applies them (lib/design-pack.ts). */
   getOrgDesignPack: () => apiClient.get<OrgTheme>("/orgs/current/design-pack").then((r) => r.data),
   /** Probes the service with the resolved credentials; a failed probe is `ok: false` with a readable message. */

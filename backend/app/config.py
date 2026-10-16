@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # Ollama (OpenAI-compatible API)
     # Local: http://localhost:11434 with any non-empty api key.
     # Ollama cloud/pro: https://ollama.com with an API key from ollama.com/settings/keys.
+    # Default model provider for orgs that saved none: ollama | openai | azure_openai | gemini
+    MODEL_PROVIDER: str = "ollama"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_API_KEY: str = "ollama"
     OLLAMA_MODEL: str = "kimi-k3:cloud"

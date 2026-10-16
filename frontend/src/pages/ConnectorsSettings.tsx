@@ -22,6 +22,8 @@ import {
   type ConnectorStatus,
   type ConnectorsPublic,
   type DesignPack,
+  type ModelProviderSpec,
+  MODEL_PROVIDERS_QUERY_KEY,
 } from "@/lib/api";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api-error";
@@ -417,9 +419,10 @@ export default function ConnectorsSettings() {
     github: { token: "", repo_id: "" },
     jira: { domain: "", email: "", token: "" },
     vercel: { token: "", team_id: "", project_id: "", project_name: "" },
-    ollama: { base_url: "", api_key: "", model: "" },
+    ollama: { provider: "ollama", base_url: "", api_key: "", model: "" },
     slack: { webhook_url: "" },
   });
+  const providersQuery = useQuery({ queryKey: MODEL_PROVIDERS_QUERY_KEY, queryFn: api.getModelProviders, staleTime: 10 * 60 * 1000 });
 
   // What each connector feeds and its last probe. A failure just hides that line.
   const statusQuery = useQuery({
@@ -451,6 +454,7 @@ export default function ConnectorsSettings() {
           },
           ollama: {
             api_key: "",
+            provider: String(res.ollama?.provider || "ollama"),
             base_url: String(res.ollama?.base_url || ""),
             model: String(res.ollama?.model || ""),
           },
@@ -530,6 +534,8 @@ export default function ConnectorsSettings() {
   const jiraToken = data?.jira?.token as SecretField | undefined;
   const vercelToken = data?.vercel?.token as SecretField | undefined;
   const ollamaKey = data?.ollama?.api_key as SecretField | undefined;
+  const providerSpec = providersQuery.data?.providers.find((p) => p.id === draft.ollama.provider) ?? providersQuery.data?.providers[0];
+  const modelConfigured = !!statusFor("ollama")?.configured || !!ollamaKey?.configured;
   const slackHook = data?.slack?.webhook_url as SecretField | undefined;
 
   const saveButton = (
@@ -543,7 +549,7 @@ export default function ConnectorsSettings() {
     <PageShell>
       <PageHeader
         title="Connectors"
-        description="Credentials for GitHub, Jira, Vercel, Ollama and Slack for this organization. Leave a secret blank to keep the saved value, or use Clear to remove it. Where the server supplies a value, it is used when nothing is saved here."
+        description="The model provider (Ollama, OpenAI, Azure OpenAI or Gemini) and the GitHub, Jira, Vercel and Slack credentials for this organization. Leave a secret blank to keep the saved value, or use Clear to remove it. Where the server supplies a value, it is used when nothing is saved here."
         actions={saveButton}
       />
 
@@ -571,20 +577,38 @@ export default function ConnectorsSettings() {
           </div>
         </Section>
 
-        <Section id="ollama" title="Ollama" configured={!!ollamaKey?.configured} status={statusFor("ollama")}>
+        <Section id="ollama" title="Model provider" configured={modelConfigured} status={statusFor("ollama")}>
           <div className="space-y-1.5">
-            <Label htmlFor="connector-field-2" className={fieldLabel}>Base URL</Label>
-            <Input
-              id="connector-field-2"
-              value={draft.ollama.base_url}
-              onChange={(e) => setDraft({ ...draft, ollama: { ...draft.ollama, base_url: e.target.value } })}
-              placeholder="https://ollama.com"
-            />
+            <Label htmlFor="connector-field-provider" className={fieldLabel}>Provider</Label>
+            <select
+              id="connector-field-provider"
+              value={draft.ollama.provider}
+              onChange={(e) => setDraft({ ...draft, ollama: { ...draft.ollama, provider: e.target.value } })}
+              className="h-10 w-full rounded-md border border-input bg-container px-3 text-sm text-ink"
+            >
+              {(providersQuery.data?.providers ?? [{ id: "ollama", name: "Ollama" } as ModelProviderSpec]).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            {providerSpec && <p className="text-xs text-ink-quaternary">{providerSpec.api_version}</p>}
           </div>
+          {providerSpec?.fields.base_url && (
+            <div className="space-y-1.5">
+              <Label htmlFor="connector-field-2" className={fieldLabel}>{providerSpec.fields.base_url.label}</Label>
+              <Input
+                id="connector-field-2"
+                value={draft.ollama.base_url}
+                onChange={(e) => setDraft({ ...draft, ollama: { ...draft.ollama, base_url: e.target.value } })}
+                placeholder={providerSpec.fields.base_url.placeholder}
+              />
+            </div>
+          )}
           <SecretInput
-            label="API key"
-            name="Ollama API key"
-            onClear={() => void clearSaved("ollama", "api_key", "Ollama API key")}
+            label={providerSpec?.fields.api_key?.label ?? "API key"}
+            name={`${providerSpec?.name ?? "Model"} API key`}
+            onClear={() => void clearSaved("ollama", "api_key", `${providerSpec?.name ?? "Model"} API key`)}
             clearing={clearing === "ollama.api_key"}
             value={draft.ollama.api_key}
             configured={ollamaKey?.configured}
@@ -593,12 +617,12 @@ export default function ConnectorsSettings() {
             onChange={(v) => setDraft({ ...draft, ollama: { ...draft.ollama, api_key: v } })}
           />
           <div className="space-y-1.5">
-            <Label htmlFor="connector-field-3" className={fieldLabel}>Model</Label>
+            <Label htmlFor="connector-field-3" className={fieldLabel}>{providerSpec?.fields.model?.label ?? "Model"}</Label>
             <Input
               id="connector-field-3"
               value={draft.ollama.model}
               onChange={(e) => setDraft({ ...draft, ollama: { ...draft.ollama, model: e.target.value } })}
-              placeholder="kimi-k3:cloud"
+              placeholder={providerSpec?.fields.model?.placeholder ?? "kimi-k3:cloud"}
             />
           </div>
         </Section>

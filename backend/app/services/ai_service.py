@@ -17,6 +17,7 @@ from openai import APIConnectionError, APIError, APITimeoutError, OpenAI, RateLi
 
 from app.config import settings
 from app.services import connector_settings_service as connectors
+from app.services import model_providers
 
 # ── Org attribution for cost logging ────────────────────────────────────────
 # Set by app.auth.dependencies.get_current_org for the duration of a request,
@@ -38,31 +39,14 @@ def reset_current_org_id(token: Token) -> None:
 
 
 def _ollama_cfg() -> tuple[str, str, str]:
-    cfg = connectors.active("ollama")
-    base = (cfg.get("base_url") or settings.OLLAMA_BASE_URL or "http://localhost:11434").rstrip("/")
-    key = cfg.get("api_key") or settings.OLLAMA_API_KEY or "ollama"
-    model = cfg.get("model") or settings.OLLAMA_MODEL or "llama3.1"
-    return base, key, model
+    """(base_url, api_key, model) of the active provider profile; kept for callers and tests."""
+    p = model_providers.profile()
+    return p.base_url, p.api_key, p.model
 
 
-def _get_client() -> OpenAI:
-    base, key, _ = _ollama_cfg()
-    # max_retries=0: _call_openai_sync owns the only retry loop.
-    return OpenAI(
-        base_url=f"{base}/v1",
-        api_key=key,
-        timeout=settings.LLM_TIMEOUT_SECONDS,
-        max_retries=0,
-    )
-
-
-_client = OpenAI(
-    base_url=f"{settings.OLLAMA_BASE_URL.rstrip('/')}/v1",
-    api_key=settings.OLLAMA_API_KEY or "ollama",
-    timeout=settings.LLM_TIMEOUT_SECONDS,
-    max_retries=0,
-)
-_MODEL = settings.OLLAMA_MODEL
+def _get_client():
+    """The active organization's chat client (`model_providers.chat_client`); max_retries=0, we retry."""
+    return model_providers.chat_client(model_providers.profile())
 
 # Ollama has no per-token billing; costs are recorded as zero but token
 # counts are still logged for usage visibility.
@@ -116,9 +100,10 @@ _QUOTA_TEXT_RE = re.compile(
 def _is_quota_error(exc: Exception) -> bool:
     if isinstance(exc, (AIQuotaError, RateLimitError)):
         return True
-    status = getattr(exc, "status_code", None)
-    if isinstance(status, int):
-        return status == 429
+    for attr in ("status_code", "code"):  # the OpenAI SDK sets status_code, google-genai sets code
+        value = getattr(exc, attr, None)
+        if isinstance(value, int):
+            return value == 429
     return bool(_QUOTA_TEXT_RE.search(str(exc)))
 
 
@@ -219,12 +204,13 @@ async def _log_cost(
         output_cost = round(completion_tokens * _COST_OUTPUT_PER_TOKEN, 6)
         total_cost = round(input_cost + output_cost, 6)
         from app.database import get_db
-        _, _, model = _ollama_cfg()
+        p = model_providers.profile()
         db = get_db()
         doc = {
             "org_id": _current_org_id.get(),
             "task_name": task_name,
-            "model": model,
+            "provider": p.provider,
+            "model": p.model,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": prompt_tokens + completion_tokens,

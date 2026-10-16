@@ -154,3 +154,16 @@ Checks: backend 678 passed / 1 skipped (4 new in `tests/test_jira_narrowed.py`);
 **Not done**: a contract test against recorded Jira fixtures (ADR-7's "stays updated" rule) and OAuth; both wait for a project that needs them.
 
 **Next task:** T-080 (provider registry: Azure OpenAI and Gemini behind one `complete()` interface) or T-004/T-050 cleanup (Pipeline page retired in favour of the project view).
+
+## 2026-10-16 — Provider registry: Ollama, OpenAI, Azure OpenAI and Gemini per org (T-080 partial)
+
+Checks: backend 688 passed / 1 skipped (10 new in `tests/test_model_providers.py`); frontend tsc clean, 540 vitest passed, build passed; the Vercel entrypoint imports with the root requirements.
+
+- `backend/app/services/model_providers.py` (`docs/chakram/MODEL_PROVIDERS.md`, ADR-10): a per-org profile (provider, base URL, key, model) resolved from the model connector with env defaults, a chat client per vendor, declared capabilities, and a read-only check per vendor. `ai_service` and the App Studio stream get their client from it; retries, concurrency, JSON repair and usage logging stay where they were. Usage rows carry `provider`.
+- Azure OpenAI goes through the v1 OpenAI-compatible endpoint with the deployment name as the model (MOD 02). Gemini goes through the official `google-genai` SDK behind `GeminiChat`, which maps system → system_instruction, JSON mode → `application/json`, usage (thoughts counted as output) and streaming (MOD 03). A 429 from either SDK takes the same quota path.
+- Settings → Model provider: a provider select with the vendor's own field labels (Resource endpoint and Deployment name for Azure; key and model for Gemini), Check connection per vendor, and the status row names the resolved provider and model. `GET /orgs/current/model-providers` is the catalog.
+- `google-genai` added to both requirements files; `MODEL_PROVIDER` env default documented in `.env.example`.
+
+**Not done**: a live call against Azure or Gemini (no account here; MOD rows stay at unit level), Entra ID and Vertex AI, per-model cost rates. The rest of T-080 (durable runs, leases, cancel, sandboxed runtime) is untouched.
+
+**Next task:** durable runs (T-080's HAR 05–07: generation and test runs persisted with sequence numbers, leases and cancel) or the cleanup slice (Pipeline page retired in favour of the project view, T-004 dead code, T-050 kit controls).

@@ -127,6 +127,6 @@ async def test_ollama_check_warns_when_the_configured_model_is_missing():
         async def get(self, url, **kwargs):
             return _Resp()
 
-    with patch.object(registry.httpx, "AsyncClient", _Client):
-        ok, message = await registry._check_ollama({"base_url": "http://x", "api_key": "", "model": "kimi-k3:cloud"})
+    with patch.object(registry.model_providers.httpx, "AsyncClient", _Client):
+        ok, message = await registry._check_model({"provider": "ollama", "base_url": "http://x", "api_key": "", "model": "kimi-k3:cloud"})
     assert ok is True and "not in the endpoint's model list" in message

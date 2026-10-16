@@ -420,8 +420,14 @@
         "MOD 02",
         "MOD 03"
       ],
-      "status": "todo",
-      "files": []
+      "status": "partial",
+      "files": [
+        "backend/app/services/model_providers.py",
+        "backend/app/services/ai_service.py",
+        "backend/app/services/connector_registry.py",
+        "frontend/src/pages/ConnectorsSettings.tsx"
+      ],
+      "notes": "Provider adapters done (MOD 01-03 at unit level): Ollama, OpenAI, Azure OpenAI v1, Gemini via google-genai, chosen per org in Settings with a check and declared capabilities. Open: durable runs, leases, cancel, sandboxed runtime, manifest, preview revision (HAR 05-07, PRE 01-02)."
     },
     {
       "id": "T-100",
