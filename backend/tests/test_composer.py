@@ -145,8 +145,10 @@ def test_form_block_composes_a_create_form_bound_to_the_store():
     assert "const { ready, doctors } = useAppData();" in form  # the ref select needs the doctors
     assert "id={`${formId}-patient`}" in form and "}};" not in form
     assert "{doctors.map((r) => <option key={r.id} value={r.id}>{String(r.name)}</option>)}" in form
-    assert '<option value="scheduled">scheduled</option>' in form
-    assert 'type="datetime-local"' in form and 'type="checkbox"' in form and "<textarea" in form
+    assert '<option value="scheduled">scheduled</option>' in form and "<Select id={`${formId}-status`}" in form
+    assert '<TextField id={`${formId}-start`} name="start" type="datetime-local"' in form and "<Checkbox" in form and "<TextArea" in form
+    assert '<FormRow label="Patient" htmlFor={`${formId}-patient`} required>' in form and '<Button type="submit"' in form
+    assert "import { Button, Checkbox, FormRow, Panel, Select, StatusBadge, TextArea, TextField } from '../chronos';" in form
     assert "const data: Omit<Appointment, 'id'> = {" in form and "satisfaction: 0," in form  # hidden fields get a default
     assert "await api.appointments.create(data);" in form
     assert "{busy ? 'Saving…' : \"Book\"}" in form

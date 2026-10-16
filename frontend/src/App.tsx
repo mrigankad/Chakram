@@ -23,7 +23,6 @@ const Monitoring = lazy(() => import("./pages/Monitoring"));
 const ReleaseGate = lazy(() => import("./pages/ReleaseGate"));
 const RequirementsIntelligence = lazy(() => import("./pages/RequirementsIntelligence"));
 const Workspace = lazy(() => import("./pages/Workspace"));
-const SDLCPipeline = lazy(() => import("./pages/SDLCPipeline"));
 const CodeImpact = lazy(() => import("./pages/CodeImpact"));
 const DocTests = lazy(() => import("./pages/DocTests"));
 const PRDGenerator = lazy(() => import("./pages/PRDGenerator"));
@@ -87,7 +86,8 @@ function App() {
             <Route path="/release-gate" element={<ReleaseGate />} />
             <Route path="/requirements-intelligence" element={<RequirementsIntelligence />} />
             <Route path="/workspace" element={<Workspace />} />
-            <Route path="/pipeline" element={<SDLCPipeline />} />
+            {/* The SDLC Pipeline page was retired in favour of the project view. */}
+            <Route path="/pipeline" element={<Navigate to="/projects" replace />} />
             <Route path="/deployments" element={<Deployments />} />
             <Route path="/code-impact" element={<CodeImpact />} />
             <Route path="/doc-tests" element={<DocTests />} />

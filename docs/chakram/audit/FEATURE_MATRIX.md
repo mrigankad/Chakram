@@ -42,7 +42,7 @@ Columns: inputs a user must supply before the page shows anything; what feeds it
 | Live Test Run | `/live-testing` (+ alias `/live-test-runner`) | repo URL or spec + URL | `repo_analysis`, `playwright_service`, healing | Unverified; 1,984-line page, 213 Chronos vs 53 shadcn class uses, 34 hand-written panels | Keep; refactor into the Test Suite tabs |
 | Code Review | `/code-review` | repo | `github` | Partial (public repos only without token) | Keep; repair GAP-02 |
 | Code Workspace | `/workspace` | repo + branch | `workspace`, `git_ops`, `copilot`, `coverage`, `test_gen`, `commit`, `impact` | Unverified | Keep |
-| SDLC Pipeline | `/pipeline` | repo + branch | `pipeline` + stage components (2,500 lines reusing Workspace, Code Review, Deploy, Live Test) | Unverified; report trusts client-supplied signals (GAP-13) | **Keep as the one guided loop**; make it read Chakram's own results; stop duplicating stage UIs in standalone pages |
+| SDLC Pipeline | `/pipeline` | repo + branch | `pipeline` + stage components (2,500 lines reusing Workspace, Code Review, Deploy, Live Test) | Unverified; report trusts client-supplied signals (GAP-13) | Retired (cleanup slice): `/pipeline` redirects to the project view; `routes/pipeline.py` removed |
 | Dashboard | `/dashboard` | prior runs | `dashboard_service` | Verified (tests) | Keep |
 
 ### Supporting

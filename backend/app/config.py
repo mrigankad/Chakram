@@ -98,7 +98,6 @@ class Settings(BaseSettings):
     # AI Workspace
     WORKSPACE_TEMP_DIR: str = "/tmp/workspaces"
     MAX_FILE_SIZE_KB: int = 500
-    MAX_REPO_SIZE_MB: int = 100
     COMMIT_AUTHOR_NAME: str = "SDLC AI"
     COMMIT_AUTHOR_EMAIL: str = "ai@sdlc.dev"
 

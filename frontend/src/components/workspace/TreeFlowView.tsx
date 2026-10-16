@@ -60,7 +60,6 @@ import {
 } from "@/lib/api";
 import { deriveRootToLeafChain } from "@/lib/dep-graph";
 import { useWorkspaceContext } from "@/context/WorkspaceContext";
-import { useOptionalPipelineContext } from "@/context/PipelineContext";
 import { useCommitImpactTree } from "@/hooks/use-commit-impact";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -889,8 +888,8 @@ export function TreeFlowView({
   onTestsGenerated?: (tests: WorkspacePlaywrightTest[]) => void;
 } = {}) {
   const { workspace, activeTab, fileTests, setFileTests } = useWorkspaceContext();
-  const pipeline = useOptionalPipelineContext();
-  const githubPat = pipeline?.githubPat || "";
+  // The SDLC Pipeline stage that once supplied a GitHub PAT here was retired.
+  const githubPat = "";
   const impactQuery = useCommitImpactTree(workspace?.workspace_id ?? null, 5, githubPat || undefined);
   const fallbackGraphQuery = useQuery({
     queryKey: ["tree-flow-fallback-graph", workspace?.workspace_id],

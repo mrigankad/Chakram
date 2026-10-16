@@ -424,6 +424,16 @@ export interface DashboardActivityItem {
   time_ago: string;
 }
 
+/** The model's review of one commit (POST /github/commits/{sha}/review). */
+export interface CommitReview {
+  summary: string;
+  findings: { file: string; line: number | null; category: string; severity: string; message: string; suggestion: string }[];
+  security_flags: string[];
+  positives: string[];
+  recommendation: string;
+  coverage_estimate: number;
+}
+
 export interface DashboardStats {
   total_tests: number;
   test_case_counts: Record<string, number>;
@@ -567,85 +577,6 @@ export interface FileNode {
   type: "file" | "directory";
   language?: string;
   children?: FileNode[];
-}
-
-// ── Pipeline types ────────────────────────────────────────────────────────────
-
-export interface PipelineReview {
-  summary: string;
-  findings: { file: string; line: number | null; category: string; severity: string; message: string; suggestion: string }[];
-  security_flags: string[];
-  positives: string[];
-  recommendation: string;
-  coverage_estimate: number;
-}
-
-export interface PipelineReportRequest {
-  owner: string;
-  repo: string;
-  version?: string;
-  commit_sha?: string;
-  jira_project?: string;
-  live_test_passed?: number;
-  live_test_failed?: number;
-  live_test_total?: number;
-  review_recommendation?: string;
-  review_critical_count?: number;
-}
-
-export type PipelineVerdict = "GO" | "NO-GO" | "CONDITIONAL" | "INSUFFICIENT_DATA";
-
-export interface PipelineOpenBug {
-  key?: string;
-  summary?: string;
-  priority?: string;
-  [extra: string]: unknown;
-}
-
-/** Shape returned by POST /api/pipeline/report. A null signal was not evaluated. */
-export interface PipelineReport {
-  pipeline_run_id: string;
-  version: string;
-  commit_sha?: string | null;
-  /** null when the verdict is INSUFFICIENT_DATA. */
-  score: number | null;
-  verdict: {
-    verdict: PipelineVerdict;
-    reason?: string;
-    primary_blocker: string | null;
-    blockers?: string[];
-    recommendation: string;
-    conditions: string[];
-  };
-  signals: {
-    ci_pass_rate: number | null;
-    live_test_pass_rate: number | null;
-    live_test_passed: number;
-    live_test_failed: number;
-    live_test_total: number;
-    review_recommendation: string | null;
-    review_critical_findings: number | null;
-    open_critical_bugs: PipelineOpenBug[] | null;
-    open_critical_bug_count?: number | null;
-    unresolved_security_findings?: number | null;
-    workflow_summary: Record<string, number>;
-  };
-  /** Signal names the score was computed from. */
-  scored_signals?: string[];
-  /** Signal name -> why it was not evaluated. */
-  not_evaluated?: Record<string, string>;
-  errors: string[];
-}
-
-export interface PipelineRunSummary {
-  id: string;
-  owner: string;
-  repo: string;
-  version: string;
-  score: number | null;
-  verdict: string;
-  commit_sha?: string | null;
-  created_at?: string | null;
 }
 
 export interface DeploymentTriggerRequest {
@@ -1412,10 +1343,6 @@ export const api = {
     apiClient.get<RunSummary>(`/test-execution/runs/${runId}`).then((r) => r.data),
 
   // Synthetic Data
-  previewSyntheticData: (requirement_id: string, count = 20) =>
-    apiClient
-      .post<PreviewDataset>("/synthetic-data/preview", { requirement_id, count })
-      .then((r) => r.data),
 
   generateSyntheticData: (requirement_id: string, count = 20) =>
     apiClient
@@ -1506,9 +1433,6 @@ export const api = {
   listRunHistory: () =>
     apiClient.get<{ runs: RunSummaryItem[] }>("/repo/runs").then((r) => r.data),
 
-  getRunDetail: (runId: string) =>
-    apiClient.get<LiveRunStatus>(`/repo/runs/${runId}`).then((r) => r.data),
-
   updatePlaywrightTest: (test_id: string, data: Partial<PlaywrightTestCase>) =>
     apiClient.put<PlaywrightTestCase>(`/repo/tests/${test_id}`, data).then((r) => r.data),
 
@@ -1540,17 +1464,8 @@ export const api = {
   getRepoPRs: (owner: string, repo: string) =>
     apiClient.get("/github/prs", { params: { owner, repo } }).then((r) => r.data as any[]),
 
-  getPRFiles: (owner: string, repo: string, prNumber: number) =>
-    apiClient.get(`/github/pr/${prNumber}/files`, { params: { owner, repo } }).then((r) => r.data as any[]),
-
   reviewPR: (owner: string, repo: string, prNumber: number, customRules?: string) =>
     apiClient.post(`/github/pr/${prNumber}/review`, { custom_rules: customRules || undefined }, { params: { owner, repo } }).then((r) => r.data),
-
-  getWorkflowRuns: (owner: string, repo: string) =>
-    apiClient.get("/github/workflow-runs", { params: { owner, repo } }).then((r) => r.data as any[]),
-
-  explainRunFailure: (owner: string, repo: string, runId: number) =>
-    apiClient.post(`/github/workflow-runs/${runId}/explain`, null, { params: { owner, repo } }).then((r) => r.data),
 
   // ── Jira ──────────────────────────────────────────────────────────────────
   getJiraProjects: () =>
@@ -1567,7 +1482,6 @@ export const api = {
       .post<{ status: string; issue_key: string; comment_id: string; comment: string }>(`/jira/stories/${encodeURIComponent(issueKey)}/post-results`, { requirement_id: requirementId })
       .then((r) => r.data),
 
-
   analyzeManualStory: (summary: string, description: string, priority: string) =>
     apiClient.post("/jira/analyze-manual", { summary, description, priority }).then((r) => r.data),
 
@@ -1576,9 +1490,6 @@ export const api = {
 
   pushACToJira: (issueKey: string, text: string) =>
     apiClient.post(`/jira/stories/${issueKey}/update-ac`, { acceptance_criteria_text: text }).then((r) => r.data),
-
-  getJiraBugs: (project: string, version?: string) =>
-    apiClient.get("/jira/bugs", { params: { project, ...(version && { version }) } }).then((r) => r.data as any[]),
 
   // ── CI Intelligence ───────────────────────────────────────────────────────
   getCIHealth: (owner: string, repo: string) =>
@@ -1608,8 +1519,6 @@ export const api = {
 
   analyzeHealing: (payload: { run_id: string; test_id: string; target_url: string }) =>
     apiClient.post<HealingAttemptDetail>("/testing/healing/analyze", payload).then((r) => r.data),
-  getHealingAttempt: (id: string) =>
-    apiClient.get<HealingAttemptDetail>(`/testing/healing/${id}`).then((r) => r.data),
   approveHealing: (id: string) =>
     apiClient.post<HealingAttemptDetail>(`/testing/healing/${id}/approve`).then((r) => r.data),
   rejectHealing: (id: string) =>
@@ -1726,9 +1635,6 @@ export const api = {
   listIncidents: () =>
     apiClient.get("/incidents").then((r) => r.data as any[]),
 
-  getIncident: (id: string) =>
-    apiClient.get(`/incidents/${id}`).then((r) => r.data),
-
   resolveIncident: (id: string, note?: string) =>
     apiClient.put(`/incidents/${id}/resolve`, { note }).then((r) => r.data),
 
@@ -1784,9 +1690,6 @@ export const api = {
   getGitLog: (workspaceId: string, maxCount?: number) =>
     apiClient.get<{ workspace_id: string; commits: GitLogEntry[] }>("/git/log", { params: { workspace_id: workspaceId, max_count: maxCount } }).then((r) => r.data),
 
-  getGitDiff: (workspaceId: string, filePath: string) =>
-    apiClient.get<{ diff: string }>("/git/diff", { params: { workspace_id: workspaceId, file_path: filePath } }).then((r) => r.data),
-
   getCommitImpactTree: (workspaceId: string, maxDepth = 4, pat?: string) =>
     apiClient
       .get<CommitImpactTreeResponse>("/commit/impact-tree", {
@@ -1811,7 +1714,6 @@ export const api = {
   // Test Generation
   generateTests: (payload: TestGenerateRequest) =>
     apiClient.post<TestGenerateResult>("/tests/generate", payload).then((r) => r.data),
-
 
   // Playwright Test Generation from Workspace Source
   generatePlaywrightTests: (payload: PlaywrightGenerateRequest) =>
@@ -1846,14 +1748,14 @@ export const api = {
   deleteTestSuite: (suite_id: string) =>
     apiClient.delete(`/tests/workspace-suites/${suite_id}`).then((r) => r.data),
 
-  // ── Pipeline ──────────────────────────────────────────────────────────────
+  // ── Commit review (Workspace) ─────────────────────────────────────────────
   // The PAT travels in the body, never as a query parameter (access logs, browser history).
   reviewCommit: (owner: string, repo: string, sha: string, pat?: string, customRules?: string) =>
     apiClient
       .post(`/github/commits/${sha}/review`, { custom_rules: customRules || undefined, pat: pat || undefined }, { params: { owner, repo } })
       .then((r) => r.data as {
         sha: string;
-        review: PipelineReview;
+        review: CommitReview;
         files_reviewed: number;
         files_in_pr?: number;
         files_failed?: number;
@@ -1861,12 +1763,6 @@ export const api = {
         files_truncated?: number;
         review_status?: "complete" | "partial" | "incomplete";
       }),
-
-  evaluatePipeline: (payload: PipelineReportRequest) =>
-    apiClient.post<PipelineReport>("/pipeline/report", payload).then((r) => r.data),
-
-  listPipelineRuns: () =>
-    apiClient.get<PipelineRunSummary[]>("/pipeline/runs").then((r) => r.data),
 
   // ── Deployments ──────────────────────────────────────────────────────────
   getDeploymentHealth: () =>
@@ -1889,9 +1785,6 @@ export const api = {
     apiClient
       .get<DeploymentEventsResponse>(`/deployments/${deploymentId}/events`, { params: { limit } })
       .then((r) => r.data),
-
-  generatePRD: (payload: PRDGenerateRequest) =>
-    apiClient.post<PRDGenerateResponse>("/prd/generate", payload).then((r) => r.data),
 
   /** Normalise a GitHub URL into a 16-char repo_id matching backend logic. */
   getRepoId: repoIdFromUrl,

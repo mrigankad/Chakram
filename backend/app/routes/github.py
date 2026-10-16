@@ -9,7 +9,6 @@ from app.auth.dependencies import get_current_org
 from app.config import settings
 from app.database import get_db
 from app.models.organization import OrganizationOut
-from app.routes.ci_intelligence import explain_workflow_run
 from app.services import ci_metrics_service, github_service
 from app.services.ai_service import review_pull_request
 
@@ -171,14 +170,3 @@ async def workflow_runs(
 ):
     runs, _ = await ci_metrics_service.get_workflow_runs(db, org.id, owner, repo, refresh=refresh)
     return runs[:max(1, per_page)]
-
-
-@router.post("/workflow-runs/{run_id}/explain")
-async def explain_run_failure(
-    owner: str,
-    repo: str,
-    run_id: int,
-    org: OrganizationOut = Depends(get_current_org),
-):
-    """Download CI logs and use AI to explain the failure."""
-    return await explain_workflow_run(owner, repo, run_id)

@@ -39,7 +39,7 @@ AIDLC-main/
 │   │   │   ├── repo_analysis.py, github.py, jira.py, ci_intelligence.py,
 │   │   │   ├── defect_prediction.py, release_gate.py, monitoring.py,
 │   │   │   ├── incidents.py, workspace.py, copilot.py,
-│   │   │   ├── git_ops.py, coverage.py, test_gen.py, pipeline.py,
+│   │   │   ├── git_ops.py, coverage.py, test_gen.py,
 │   │   │   ├── impact.py, commit.py, deployments.py, prd.py,
 │   │   │   ├── cost_logs.py, ai_ide.py, baseline.py
 │   │   ├── services/             # business logic, AI calls, integrations
@@ -65,7 +65,7 @@ AIDLC-main/
 `/prioritization`, `/live-testing` (`/live-test-runner` alias), `/code-review`,
 `/ci-intelligence`, `/defect-prediction`, `/generated-tests`, `/incidents`,
 `/monitoring`, `/release-gate`, `/requirements-intelligence`,
-`/workspace`, `/pipeline`, `/deployments`,
+`/workspace`, `/pipeline` (redirects to `/projects`), `/deployments`,
 `/code-impact`, `/doc-tests`, `/prd`, `/profile`, `/cost-tracker` (Usage & Cost), `/ai-ide`
 (App Studio), `/repo-baseline`, `/root-cause`, `/test-selection`, `/self-healing`,
 `/settings/connectors`, `/login`.

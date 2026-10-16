@@ -1,7 +1,7 @@
 # Chronos kit: API for page authors
 
 Target: Vite + React 18 + TypeScript + Tailwind 3.4 + react-router-dom 6 + recharts 2.15 + lucide-react.
-Kit version: `src/chronos/VERSION` (9).
+Kit version: `src/chronos/VERSION` (10).
 
 Setup the host app must do once: `src/index.css` imports `./chronos/tokens.css` (then `./design.css`) and `src/main.tsx` wraps the app in `BrowserRouter`. `tailwind.config.js` needs `content: ["./src/**/*.{ts,tsx}"]` and `theme: { extend: <contents of src/chronos/theme.json> }`.
 
@@ -59,6 +59,11 @@ Every component accepts className; your classes override the component's default
 ## Controls and icons
 
 - `Select({ value?; defaultValue?; onChange?(e); onValueChange?(value); options?: { value; label; disabled? }[]; placeholder?; disabled?; name? (hidden input); id?; "aria-label"?; size? = "md" | "sm"; className? (applies to the trigger, `w-*` also sizes the wrapper); children? <option>/<optgroup> })` - custom dropdown (listbox, keyboard, typeahead, flips above when no room); `onChange` gets `e.target.value`.
+- `Button({ variant? = "primary" | "secondary" | "ghost"; size? = "md" | "sm"; type? = "button"; disabled?; onClick?; className?; children })` - pill button; `type` defaults to "button" so it never submits a form by accident.
+- `TextField(<input> props)` - text/number/date/email/url input in the field style; give it `id` and `name`.
+- `TextArea(<textarea> props; rows? = 3)` - multi-line field.
+- `Checkbox({ label?; id?; checked?; onChange?; … })` - checkbox with its label on the right.
+- `FormRow({ label; htmlFor?; required?; hint?; error?; className?; children })` - label above a control (`htmlFor` = the control's `id`), with an optional hint or error line.
 - `InlineArrow({ className? })` - small chevron for flows.
 - `Mark({ id: string; size? = 40; className? })` - decorative 3D image from `/marks/<id>.png`. Alt is empty; never replace a heading with it. An empty or invalid id (letters, digits, `_`, `-`, `.` only) renders nothing.
 - `markUrl(id)` - the image URL (override base with `VITE_MARKS_BASE`).

@@ -299,28 +299,6 @@ async def test_org_a_cannot_see_org_b_cost_logs(app_client, db):
     assert resp.json()["total"] == 1
 
 
-# ── pipeline_runs ─────────────────────────────────────────────────────────
-
-@pytest.mark.anyio
-async def test_org_a_cannot_see_org_b_pipeline_runs(app_client, db):
-    org_a = await organization_service.create_organization(db, workos_org_id="org_a", name="A")
-    org_b = await organization_service.create_organization(db, workos_org_id="org_b", name="B")
-
-    await db.pipeline_runs.insert_one({
-        "_id": "pr-1", "org_id": org_a.id, "owner": "o", "repo": "r", "version": "HEAD",
-        "commit_sha": None, "score": 80, "verdict": "GO", "signals": {}, "errors": [],
-    })
-
-    _cookies(app_client, org_b.id)
-    resp = await app_client.get("/api/pipeline/runs")
-    assert resp.status_code == 200
-    assert resp.json() == []
-
-    _cookies(app_client, org_a.id)
-    resp = await app_client.get("/api/pipeline/runs")
-    assert len(resp.json()) == 1
-
-
 # ── repo_analyses / playwright_tests / playwright_runs ───────────────────
 
 @pytest.mark.anyio
@@ -590,7 +568,6 @@ async def test_dashboard_stats_are_org_scoped(app_client, db):
     ("GET", "/api/copilot/snippets"),
     ("GET", "/api/baseline/repo-1"),
     ("GET", "/api/cost-logs"),
-    ("GET", "/api/pipeline/runs"),
     ("GET", "/api/repo/analyses/analysis-1"),
     ("GET", "/api/dashboard/stats"),
     ("PATCH", "/api/auth/me"),

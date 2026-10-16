@@ -66,7 +66,6 @@ async def test_index_and_seed_steps_create_the_new_indexes(db):
     assert [("org_id", 1), ("requirement_id", 1), ("tc_id", 1)] in _index_keys(await db.test_cases.index_information())
     assert [("org_id", 1), ("created_at", -1)] in _index_keys(await db.api_cost_logs.index_information())
     assert [("org_id", 1), ("triggered_at", -1)] in _index_keys(await db.incidents.index_information())
-    assert [("org_id", 1), ("created_at", -1)] in _index_keys(await db.pipeline_runs.index_information())
     assert [("org_id", 1), ("workspace_id", 1), ("created_at", 1)] in _index_keys(
         await db[test_gen_service.SUITES_COLLECTION].index_information()
     )

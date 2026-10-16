@@ -7,7 +7,7 @@
  * an array. Panel and KpiTile contents sit inside a SectionBoundary.
  */
 
-import { Children, type ReactNode } from "react";
+import { Children, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { SectionBoundary } from "./boundary";
@@ -466,5 +466,116 @@ export function BarList({
         );
       })}
     </ul>
+  );
+}
+
+// --- controls --------------------------------------------------------------
+
+type ButtonVariant = "primary" | "secondary" | "ghost";
+type ButtonSize = "md" | "sm";
+
+const BUTTON_VARIANT: Record<ButtonVariant, string> = {
+  primary: "bg-action-primary text-on-color hover:bg-action-primary-hover",
+  secondary: "border border-default bg-container text-primary hover:bg-raised",
+  ghost: "text-secondary hover:bg-raised hover:text-primary",
+};
+const BUTTON_SIZE: Record<ButtonSize, string> = {
+  md: "h-9 px-4 text-label-md",
+  sm: "h-7 px-3 text-label-sm",
+};
+
+/**
+ * The kit's button: pill shape, three variants, one focus ring. `type` defaults to
+ * "button" so a button inside a form never submits by accident.
+ */
+export function Button({
+  variant = "primary",
+  size = "md",
+  type = "button",
+  className,
+  children,
+  ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: ButtonSize }) {
+  const v = pick(BUTTON_VARIANT, variant, BUTTON_VARIANT.primary);
+  const s = pick(BUTTON_SIZE, size, BUTTON_SIZE.md);
+  return (
+    <button
+      type={type}
+      className={cx(
+        "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-active disabled:cursor-not-allowed disabled:opacity-60",
+        v,
+        s,
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+const FIELD_CLASS =
+  "w-full rounded-lg border border-muted bg-container px-3 py-2 text-body-md text-primary placeholder:text-quaternary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-active disabled:opacity-60";
+
+/** A text, number, date, email or url input in the kit's field style. */
+export function TextField({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
+  return <input className={cx(FIELD_CLASS, className)} {...rest} />;
+}
+
+/** A multi-line input in the kit's field style; `rows` defaults to 3. */
+export function TextArea({ className, rows = 3, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea rows={rows} className={cx(FIELD_CLASS, className)} {...rest} />;
+}
+
+/** A checkbox with its label on the right. */
+export function Checkbox({
+  label,
+  className,
+  id,
+  ...rest
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { label?: ReactNode }) {
+  return (
+    <label htmlFor={id} className={cx("inline-flex items-center gap-2 text-body-md text-primary", className)}>
+      <input id={id} type="checkbox" className="size-4 rounded border-muted accent-[var(--action-primary-default)]" {...rest} />
+      {label}
+    </label>
+  );
+}
+
+/**
+ * Label above a control, with an optional required mark, hint and error line.
+ * Pass `htmlFor` matching the control's `id` so the label is clickable.
+ */
+export function FormRow({
+  label,
+  htmlFor,
+  required,
+  hint,
+  error,
+  className,
+  children,
+}: {
+  label: ReactNode;
+  htmlFor?: string;
+  required?: boolean;
+  hint?: ReactNode;
+  error?: ReactNode;
+  className?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className={cx("block", className)}>
+      <label htmlFor={htmlFor} className="mb-1 block text-label-sm text-secondary">
+        {label}
+        {required ? <span aria-hidden="true"> *</span> : null}
+      </label>
+      {children}
+      {error ? (
+        <p className="mt-1 text-caption text-error" role="alert">{toText(error)}</p>
+      ) : hint ? (
+        <p className="mt-1 text-caption text-tertiary">{hint}</p>
+      ) : null}
+    </div>
   );
 }

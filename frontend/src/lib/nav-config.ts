@@ -75,13 +75,6 @@ export const projectsItem: NavItem = {
   hint: "Every app, build to operate",
 };
 
-export const pipelineItem: NavItem = {
-  title: "SDLC Pipeline",
-  url: "/pipeline",
-  icon: Workflow,
-  hint: "End-to-end delivery workflow",
-};
-
 /** Sidebar footer entry beside Profile; nothing else links to it. */
 export const costTrackerItem: NavItem = {
   title: "Usage & Cost",
@@ -252,7 +245,6 @@ const extraPageMeta: Record<string, PageMeta> = {
 export const allNavItems: NavItem[] = [
   dashboardItem,
   projectsItem,
-  pipelineItem,
   ...platformSections.flatMap((s) => s.items),
 ];
 
@@ -264,7 +256,6 @@ export function allSearchablePages(): PageMeta[] {
   const rows: PageMeta[] = [
     { ...dashboardItem, section: "Overview", hint: "Platform overview" },
     { ...projectsItem, section: "Projects" },
-    { ...pipelineItem, section: "Pipeline" },
   ];
   for (const section of platformSections) {
     for (const item of section.items) {
@@ -316,7 +307,6 @@ export function findPageForPath(pathname: string): PageMeta | null {
   if (hidden) return hidden;
   if (matchesPath(dashboardItem.url, pathname)) return { ...dashboardItem, section: "Overview" };
   if (matchesPath(projectsItem.url, pathname)) return { ...projectsItem, section: "Projects" };
-  if (matchesPath(pipelineItem.url, pathname)) return { ...pipelineItem, section: "Pipeline" };
   for (const section of platformSections) {
     const item = section.items.find((candidate) => matchesPath(candidate.url, pathname));
     if (item) return { ...item, section: section.label, sectionId: section.id };

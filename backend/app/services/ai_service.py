@@ -56,7 +56,6 @@ _COST_OUTPUT_PER_TOKEN = 0.0
 _TASK_LABELS: dict[str, str] = {
     "generate_test_cases": "Generate Test Cases",
     "generate_requirement_based_data": "Generate Test Data (Requirement)",
-    "generate_column_based_data": "Generate Test Data (Columns)",
     "analyze_codebase": "Analyze Codebase",
     "generate_playwright_tests": "Generate Playwright Tests",
     "analyze_commit_and_generate_tests": "Analyze Commit & Generate Tests",
@@ -498,34 +497,6 @@ Rules:
 """
     raw = await _call_openai(prompt)
     return _parse_json_object(raw)
-
-
-async def generate_column_based_data(
-    columns: list[str],
-    count: int = 20,
-    requirement: str | None = None,
-) -> list[dict[str, Any]]:
-    """
-    Given a list of column names (and optional requirement context),
-    ask the model to generate `count` realistic data rows for those columns.
-    Returns a list of dicts keyed by the column names.
-    """
-    req_hint = f'\nRequirement context: "{requirement}"' if requirement else ""
-    prompt = f"""You are a test data generator.{req_hint}
-
-Generate {count} realistic test data rows for a dataset with these columns:
-{columns}
-
-Return ONLY a valid JSON object with a single key "rows" containing a JSON array.
-Each element must be an object with exactly these keys: {columns}
-Infer sensible data types and realistic value ranges from the column names.
-Vary the values realistically across rows."""
-
-    raw = await _call_openai(prompt)
-    parsed = _parse_json(raw)
-    # Accept either a bare array or {"rows": [...]}
-    rows: list[dict[str, Any]] = parsed if isinstance(parsed, list) else parsed.get("rows", parsed)
-    return rows
 
 
 async def analyze_codebase(codebase_content: str, target_url: str) -> dict[str, Any]:

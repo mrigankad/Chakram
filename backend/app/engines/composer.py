@@ -627,34 +627,32 @@ def _render_block(block: Block, spec: AppSpec, imports: _Imports, indent: int = 
 # ── forms ────────────────────────────────────────────────────────────────────
 
 def _input_for(fname: str, field: FieldSpec, spec: AppSpec) -> tuple[str, str]:
-    """(control JSX, initial value expression) for one form field."""
-    label = _q(field.label)
+    """(control JSX, initial value expression) for one form field, built from the kit's controls."""
     common = f"id={{`${{formId}}-{fname}`}} name={_q(fname)}"
-    cls = "\"w-full rounded-lg border border-muted bg-container px-3 py-2 text-body-md text-primary placeholder:text-quaternary focus-visible:ring-2 ring-active\""
     if field.kind == "enum":
         options = "".join(f"<option value={_q(v)}>{v}</option>" for v in field.values)
-        return (f"<select {common} className={cls} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}}>{options}</select>", _q(field.values[0]))
+        return (f"<Select {common} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}}>{options}</Select>", _q(field.values[0]))
     if field.kind == "ref" and field.ref in spec.entities:
         target = spec.entities[field.ref]
         rows = collection_name(field.ref)
         return (
-            f"<select {common} className={cls} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}}>"
-            f"<option value=\"\">Select…</option>{{{rows}.map((r) => <option key={{r.id}} value={{r.id}}>{{String(r.{target.label_field})}}</option>)}}</select>",
+            f"<Select {common} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} placeholder=\"Select…\">"
+            f"{{{rows}.map((r) => <option key={{r.id}} value={{r.id}}>{{String(r.{target.label_field})}}</option>)}}</Select>",
             '""',
         )
     if field.kind == "boolean":
-        return (f"<input {common} type=\"checkbox\" className=\"size-4 rounded border-muted\" checked={{Boolean(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.checked)}} />", "false")
+        return (f"<Checkbox {common} label={_q(field.label)} checked={{Boolean(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.checked)}} />", "false")
     if field.kind == "text":
-        return (f"<textarea {common} className={cls} rows={{3}} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
+        return (f"<TextArea {common} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
     if field.kind in ("number", "money", "percent"):
         step = ' step="0.01"' if field.kind != "number" else ""
-        return (f"<input {common} type=\"number\"{step} className={cls} value={{values.{fname} === '' ? '' : Number(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value === '' ? '' : Number(e.target.value))}} />", "0")
+        return (f"<TextField {common} type=\"number\"{step} value={{values.{fname} === '' ? '' : Number(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value === '' ? '' : Number(e.target.value))}} />", "0")
     if field.kind == "date":
-        return (f"<input {common} type=\"date\" className={cls} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
+        return (f"<TextField {common} type=\"date\" value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
     if field.kind == "datetime":
-        return (f"<input {common} type=\"datetime-local\" className={cls} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
+        return (f"<TextField {common} type=\"datetime-local\" value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
     kind = {"email": "email", "url": "url"}.get(field.kind, "text")
-    return (f"<input {common} type=\"{kind}\" className={cls} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
+    return (f"<TextField {common} type=\"{kind}\" value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
 
 
 def form_tsx(block: Block, spec: AppSpec) -> str:
@@ -668,11 +666,13 @@ def form_tsx(block: Block, spec: AppSpec) -> str:
     controls = []
     for f in block.fields:
         control, _ = _input_for(f, entity.fields[f], spec)
+        if entity.fields[f].kind == "boolean":
+            controls.append(f"        <div className=\"flex items-end\">\n          {control}\n        </div>")
+            continue
         controls.append(
-            f"        <label className=\"block\">\n"
-            f"          <span className=\"mb-1 block text-label-sm text-secondary\">{entity.fields[f].label}{' *' if f in required else ''}</span>\n"
+            f"        <FormRow label={_q(entity.fields[f].label)} htmlFor={{`${{formId}}-{f}`}}{' required' if f in required else ''}>\n"
             f"          {control}\n"
-            f"        </label>"
+            f"        </FormRow>"
         )
     conversions = []
     for f in block.fields:
@@ -708,7 +708,7 @@ def form_tsx(block: Block, spec: AppSpec) -> str:
     ) if required else ""
     return (
         f"import {{ useId, useState, type FormEvent }} from 'react';\n"
-        f"import {{ Panel, StatusBadge }} from '../chronos';\n"
+        f"import {{ Button, Checkbox, FormRow, Panel, Select, StatusBadge, TextArea, TextField }} from '../chronos';\n"
         f"import {{ api, useAppData }} from '../data/store';\n"
         f"import type {{ {block.entity} }} from '../data/types';\n\n"
         f"const initial = {{ {initial} }};\n\n"
@@ -740,9 +740,9 @@ def form_tsx(block: Block, spec: AppSpec) -> str:
         f"      <form onSubmit={{submit}} className=\"grid gap-3 sm:grid-cols-2\" aria-label={_q(block.title)}>\n"
         + "\n".join(controls) + "\n"
         f"        <div className=\"flex items-center gap-3 sm:col-span-2\">\n"
-        f"          <button type=\"submit\" disabled={{busy || !ready}} className=\"rounded-full bg-action-primary px-3 py-1.5 text-label-sm text-on-color hover:bg-action-primary-hover disabled:opacity-60\">\n"
+        f"          <Button type=\"submit\" disabled={{busy || !ready}}>\n"
         f"            {{busy ? 'Saving…' : {_q(block.submit_label)}}}\n"
-        f"          </button>\n"
+        f"          </Button>\n"
         f"          {{message ? <StatusBadge tone={{message.tone}}>{{message.text}}</StatusBadge> : null}}\n"
         f"        </div>\n"
         f"      </form>\n"

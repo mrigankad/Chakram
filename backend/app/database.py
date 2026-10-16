@@ -65,4 +65,3 @@ async def ensure_core_indexes(db: AsyncIOMotorDatabase) -> None:
     await db["test_cases"].create_index([("org_id", 1), ("requirement_id", 1), ("tc_id", 1)])
     await db["api_cost_logs"].create_index([("org_id", 1), ("created_at", -1)])
     await db["incidents"].create_index([("org_id", 1), ("triggered_at", -1)])
-    await db["pipeline_runs"].create_index([("org_id", 1), ("created_at", -1)])

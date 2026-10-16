@@ -180,3 +180,15 @@ Checks: backend 689 passed / 1 skipped (5 new in `tests/test_durable_runs.py`, t
 **Not done**: a fencing token on workspace writes (HAR 08), test-execution runs on the same store, the sandboxed runtime and preview revision (PRE 01–02). A live interrupted build (kill the server mid-run, restart, resume) was not exercised here; the unit tests simulate the lease expiry.
 
 **Next task:** cleanup slice (retire the Pipeline page in favour of the project view, T-004 dead code, T-050 kit controls) or the `detail` block for composed apps.
+
+## 2026-10-16 — Cleanup: Pipeline retired, dead code gone, kit controls (T-004 done, T-050 partial)
+
+Checks: backend 654 passed / 1 skipped (the retired pipeline report's tests went with it); frontend tsc clean, 540 vitest passed, build passed; `check:composed` and `check:api-kit` pass; the Vercel entrypoint imports.
+
+- **SDLC Pipeline retired.** The project view answers the same question from stored data (ADR-6, GAP-13); the page, its five stage components, `PipelineContext`, `routes/pipeline.py` and `pipeline_runs` are gone, and `/pipeline` redirects to `/projects`. `UnifiedTestIntelligence` moved to `components/live-testing/`; the Live Test Runner and the Workspace tree no longer read a PAT from the pipeline.
+- **Dead code (GAP-21).** 26 `components/ui/*` files nothing imported, `hooks/use-toast`, `hooks/use-pipeline`, `lib/analytics-charts.ts`, 12 API client methods without a caller, and the stylesheet's unused login animations, `dash-*`, `glow-*` and gradient classes (`index.css` 759 → 357 lines). 21 npm packages left `package.json` (Radix widgets, Babel, react-hook-form, zod, embla, vaul, input-otp, react-day-picker, Hugeicons core). Backend: the duplicate `/github/workflow-runs/{id}/explain` route, `generate_column_based_data`, `MAX_REPO_SIZE_MB`.
+- **Kit controls (kit 10).** `Button`, `TextField`, `TextArea`, `Checkbox` and `FormRow` join the Chronos kit with the kit's field style and focus ring; the composed form block now uses them instead of hand-written classes, so a design pack restyles forms too. `KIT_API.md` and the component sheet document them; the golden app is regenerated and type-checks.
+
+**Not done**: the rest of T-050 (Switch, Tabs, Dialog, Drawer, Toast, Breadcrumbs, Skeleton), the Monitoring demo generator (the page is labelled demo and hidden from the sidebar; removing the generator means removing the page), and the `brand-*` gradient tokens in `tailwind.config.ts` that nothing uses yet.
+
+**Next task:** the `detail` block for composed apps (edit and delete one row), or HAR 08 (a fencing token on workspace writes).

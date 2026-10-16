@@ -84,13 +84,14 @@
       "acceptance": [
         "AUD 02"
       ],
-      "status": "todo",
+      "status": "done",
       "files": [
         "frontend/src/components/ui/*",
         "frontend/package.json",
         "frontend/src/lib/analytics-charts.ts",
         "frontend/src/index.css"
-      ]
+      ],
+      "notes": "26 unused ui/* files, 2 hooks, lib/analytics-charts.ts, 12 unused api.ts methods, ~400 lines of unused index.css (login animations, dash-*, glow-*), 21 npm packages, the duplicate /github/workflow-runs/{id}/explain route, generate_column_based_data and MAX_REPO_SIZE_MB removed. The SDLC Pipeline page and routes/pipeline.py retired in favour of the project view (/pipeline redirects to /projects)."
     },
     {
       "id": "T-010",
@@ -338,10 +339,11 @@
       "acceptance": [
         "OPS 02"
       ],
-      "status": "todo",
+      "status": "partial",
       "files": [
         "backend/app/templates/chronos_kit/src/chronos/*"
-      ]
+      ],
+      "notes": "Kit 10 adds Button, TextField, TextArea, Checkbox and FormRow; the composed form block uses them. Open: IconButton, Switch, Tabs, Dialog, Drawer, Toast, Breadcrumbs, Skeleton."
     },
     {
       "id": "T-060",

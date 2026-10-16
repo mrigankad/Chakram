@@ -111,7 +111,6 @@ export function isMarkId(id: string): id is MarkId {
 /** Route path (see `nav-config.ts` and `App.tsx`) to the page-title mark. */
 export const PAGE_MARKS: Partial<Record<string, MarkId>> = {
   "/dashboard": "mark-dashboard",
-  "/pipeline": "mark-pipeline",
   "/projects": "mark-pipeline",
   "/ai-ide": "mark-ai-app-builder",
   "/workspace": "mark-ai-workspace",

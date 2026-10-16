@@ -151,9 +151,7 @@
   ::-webkit-scrollbar-thumb:hover {
     background: var(--surface-scroll-bar-hover);
   }
-}
-
-@layer utilities {
+}@layer utilities {
   /* Weight scale, as in Chronos: 400 body, 500 labels, 600 headings. Nothing heavier.
      Michroma ships one weight; asking for bold makes the browser smear a fake one. */
   .font-bold,
@@ -215,22 +213,6 @@
     color: var(--color-status-content);
   }
 
-  .bg-gradient-brand {
-    background: var(--color-action-primary);
-    color: var(--color-action-primary-content);
-  }
-
-  .text-gradient-brand,
-  .text-gradient {
-    color: var(--color-primary);
-    background: none;
-    -webkit-text-fill-color: unset;
-  }
-
-  .app-page-bg {
-    background: var(--color-page);
-  }
-
   .floating-card,
   .page-card,
   .dash-panel {
@@ -243,49 +225,6 @@
   .floating-card::before,
   .page-card::before {
     display: none;
-  }
-
-
-  .glow-primary,
-  .glow-primary-strong,
-  .glow-secondary,
-  .border-glow {
-    box-shadow: none;
-  }
-
-  .neon-line {
-    height: 1px;
-    background: var(--color-stroke-muted);
-  }
-
-  .stat-card {
-    @apply relative overflow-hidden rounded-lg border p-5;
-    background: var(--color-container);
-    border-color: var(--color-stroke-muted);
-  }
-
-  .stat-card:hover {
-    transform: none;
-  }
-
-  .login-shell {
-    background: var(--color-page);
-  }
-
-  .login-shell--video {
-    background: var(--color-page);
-  }
-
-  .login-bg {
-    background: radial-gradient(circle at 20% 10%, var(--overlay-soft), transparent 40%), var(--color-page);
-  }
-
-  .modern-shadow {
-    box-shadow: var(--shadow-elevated);
-  }
-
-  .login-enter {
-    animation: login-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   [data-sidebar="menu-button"][data-active="true"] {
@@ -377,16 +316,6 @@
     border-bottom-left-radius: 4px;
   }
 
-  .dash-panel-shine {
-    display: none;
-  }
-
-  .dash-panel-icon {
-    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-ink-secondary;
-    background: var(--color-action);
-    border-color: var(--color-stroke-muted);
-  }
-
   .dash-kpi {
     @apply relative overflow-hidden rounded-lg border px-4 py-3.5 text-foreground;
     background: var(--color-container);
@@ -395,33 +324,14 @@
     transition: border-color 0.2s ease;
   }
 
-
-  .dash-kpi-mesh {
-    display: none;
-  }
-
-  .dash-kpi-icon {
-    @apply flex h-9 w-9 items-center justify-center rounded-lg border;
-    background: var(--color-action);
-    border-color: var(--color-stroke-muted);
-    color: var(--color-secondary);
-  }
-
   .dash-kpi-value {
     font-family: var(--font-display);
     @apply text-[22px] font-normal leading-tight tracking-tight tabular-nums sm:text-[28px];
     color: var(--color-primary);
   }
 
-  .dash-kpi-delta {
-    @apply rounded-full px-2 py-0.5 text-[10px] font-medium tabular-nums;
-    background: var(--color-action);
-    color: var(--color-tertiary);
-  }
-
   .dash-kpi-accent-primary,
   .dash-kpi-accent-positive,
-  .dash-kpi-accent-success,
   .dash-kpi-accent-destructive,
   .dash-kpi-accent-warning {
     background: var(--color-container);
@@ -431,103 +341,6 @@
     @apply rounded-lg border px-4 py-3 text-foreground;
     background: var(--color-raised-2);
     border-color: var(--color-stroke);
-  }
-
-  .dash-legend-dot {
-    @apply h-2.5 w-2.5 shrink-0 rounded-full;
-  }
-
-  .dash-severity-track {
-    @apply h-2.5 overflow-hidden rounded-full;
-    background: var(--overlay-soft);
-  }
-
-  .dash-severity-fill {
-    @apply h-full rounded-full;
-    box-shadow: none;
-  }
-
-  .dash-activity-item {
-    @apply relative flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors;
-  }
-
-  .dash-activity-item:hover {
-    background: var(--color-action);
-    border-color: var(--color-stroke-muted);
-  }
-
-  /* Per-row timeline no shared absolute line (avoids overlap) */
-  .activity-timeline {
-    @apply m-0 list-none space-y-0 p-0;
-  }
-
-  .activity-timeline-item {
-    @apply relative flex items-start gap-3 py-2.5 pl-1;
-  }
-
-  .activity-timeline-item:not(:last-child)::before {
-    content: "";
-    position: absolute;
-    left: 1.125rem; /* center of 36px node (0.25rem pad + 18px) */
-    top: 2.25rem;
-    bottom: -0.125rem;
-    width: 1px;
-    background: var(--color-stroke-muted);
-  }
-
-  .activity-timeline-node {
-    @apply relative z-[1] flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border;
-    background: var(--color-raised);
-    border-color: var(--color-stroke-muted);
-  }
-
-  .activity-timeline-node--pass {
-    color: var(--color-success);
-    background: var(--color-success-bg);
-    border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
-  }
-
-  .activity-timeline-node--fail {
-    color: var(--color-error);
-    background: var(--color-error-bg);
-    border-color: color-mix(in srgb, var(--color-error) 35%, transparent);
-  }
-
-  .dash-metric-hero {
-    @apply relative overflow-hidden rounded-lg border p-6 text-left;
-    background: var(--color-container);
-    border-color: var(--color-stroke-muted);
-    box-shadow: none;
-  }
-
-  .dash-metric-hero-value {
-    font-family: var(--font-display);
-    @apply mt-3 block text-4xl font-normal tracking-tight tabular-nums;
-    color: var(--color-primary);
-    background: none;
-    -webkit-text-fill-color: unset;
-  }
-
-  .dash-workflow-step {
-    @apply relative flex cursor-pointer flex-col gap-3 overflow-hidden rounded-lg border p-4 transition-colors;
-    background: var(--color-container);
-    border-color: var(--color-stroke-muted);
-    box-shadow: none;
-  }
-
-  .dash-workflow-step:hover {
-    border-color: var(--color-stroke);
-    background: var(--color-raised-2);
-    box-shadow: none;
-    transform: none;
-  }
-
-  .dash-donut-center {
-    @apply pointer-events-none absolute inset-0 flex flex-col items-center justify-center;
-  }
-
-  .proportional-nums {
-    font-variant-numeric: proportional-nums;
   }
 }
 
@@ -540,220 +353,5 @@
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes login-orb-drift-a {
-  0%,
-  100% {
-    transform: translate3d(-6%, -4%, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(8%, 6%, 0) scale(1.12);
-  }
-}
-
-@keyframes login-orb-drift-b {
-  0%,
-  100% {
-    transform: translate3d(4%, 2%, 0) scale(1.05);
-  }
-  50% {
-    transform: translate3d(-10%, -8%, 0) scale(0.92);
-  }
-}
-
-@keyframes login-orb-drift-c {
-  0%,
-  100% {
-    transform: translate3d(0%, 8%, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-4%, -12%, 0) scale(1.18);
-  }
-}
-
-@keyframes login-grid-pan {
-  0% {
-    background-position: 0 0;
-  }
-  100% {
-    background-position: 56px 56px;
-  }
-}
-
-@keyframes login-sheen-sweep {
-  0% {
-    transform: translateX(-45%) rotate(14deg);
-    opacity: 0;
-  }
-  30% {
-    opacity: 0.45;
-  }
-  70%,
-  100% {
-    transform: translateX(125%) rotate(14deg);
-    opacity: 0;
-  }
-}
-
-@keyframes login-flow-sweep {
-  0% {
-    transform: translate3d(-30%, 20%, 0);
-    opacity: 0;
-  }
-  18% {
-    opacity: 0.7;
-  }
-  55% {
-    opacity: 0.35;
-  }
-  100% {
-    transform: translate3d(110%, -45%, 0);
-    opacity: 0;
-  }
-}
-
-.login-ambient {
-  --wayam-orange: #fc7f06;
-  --wayam-amber: #fda40b;
-  --wayam-ember: #df4302;
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  z-index: 0;
-}
-
-.login-wash {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 90% 70% at 50% -10%, color-mix(in srgb, var(--wayam-orange) 22%, transparent), transparent 58%),
-    radial-gradient(ellipse 60% 50% at 90% 80%, color-mix(in srgb, var(--wayam-ember) 16%, transparent), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 8% 70%, color-mix(in srgb, var(--wayam-amber) 12%, transparent), transparent 50%),
-    linear-gradient(165deg, var(--color-page) 0%, color-mix(in srgb, var(--color-page) 88%, #161b22 12%) 100%);
-}
-
-.login-orb {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(56px);
-  opacity: 0.7;
-  will-change: transform;
-}
-
-.login-orb--a {
-  width: min(58vw, 480px);
-  height: min(58vw, 480px);
-  top: -12%;
-  left: 12%;
-  background: color-mix(in srgb, var(--wayam-orange) 55%, transparent);
-  animation: login-orb-drift-a 18s ease-in-out infinite;
-}
-
-.login-orb--b {
-  width: min(48vw, 400px);
-  height: min(48vw, 400px);
-  right: -8%;
-  bottom: 4%;
-  background: color-mix(in srgb, var(--wayam-ember) 42%, transparent);
-  animation: login-orb-drift-b 22s ease-in-out infinite;
-}
-
-.login-orb--c {
-  width: min(40vw, 320px);
-  height: min(40vw, 320px);
-  left: 4%;
-  bottom: -6%;
-  background: color-mix(in srgb, var(--wayam-amber) 38%, transparent);
-  animation: login-orb-drift-c 26s ease-in-out infinite;
-}
-
-.login-grid {
-  position: absolute;
-  inset: -18%;
-  opacity: 0.34;
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--wayam-orange) 28%, var(--color-stroke)) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--wayam-orange) 22%, var(--color-stroke)) 1px, transparent 1px);
-  background-size: 56px 56px;
-  transform: perspective(900px) rotateX(58deg) scale(1.35);
-  transform-origin: center 35%;
-  mask-image: radial-gradient(ellipse 70% 55% at 50% 38%, black 12%, transparent 72%);
-  animation: login-grid-pan 32s linear infinite;
-}
-
-.login-flow {
-  position: absolute;
-  width: 140%;
-  height: 2px;
-  left: -20%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--wayam-amber) 15%, transparent) 18%,
-    color-mix(in srgb, var(--wayam-orange) 85%, white 5%) 48%,
-    color-mix(in srgb, var(--wayam-ember) 70%, transparent) 72%,
-    transparent 100%
-  );
-  filter: blur(0.4px);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--wayam-orange) 45%, transparent);
-  animation: login-flow-sweep 11s ease-in-out infinite;
-}
-
-.login-flow--a {
-  top: 28%;
-  animation-delay: 0s;
-}
-
-.login-flow--b {
-  top: 46%;
-  height: 1.5px;
-  opacity: 0.85;
-  animation-duration: 14s;
-  animation-delay: -4s;
-}
-
-.login-flow--c {
-  top: 62%;
-  height: 1px;
-  opacity: 0.7;
-  animation-duration: 17s;
-  animation-delay: -8s;
-}
-
-.login-sheen {
-  position: absolute;
-  top: -25%;
-  left: 0;
-  width: 38%;
-  height: 150%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--wayam-orange) 14%, transparent),
-    color-mix(in srgb, var(--wayam-amber) 10%, transparent),
-    transparent
-  );
-  animation: login-sheen-sweep 13s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .login-enter {
-    animation: none;
-  }
-
-  .login-orb--a,
-  .login-orb--b,
-  .login-orb--c,
-  .login-grid,
-  .login-flow,
-  .login-sheen {
-    animation: none;
-  }
-
-  .login-flow {
-    opacity: 0.25;
   }
 }

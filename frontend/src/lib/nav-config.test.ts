@@ -160,7 +160,7 @@ describe("allSearchablePages", () => {
     expect(new Set(seen).size).toBe(seen.length);
     for (const url of Object.keys(hiddenPageMeta)) expect(seen).toContain(url);
     for (const url of PARKED) expect(seen).toContain(url);
-    for (const url of ["/dashboard", "/projects", "/pipeline", "/cost-tracker", "/profile", "/settings/connectors"]) {
+    for (const url of ["/dashboard", "/projects", "/cost-tracker", "/profile", "/settings/connectors"]) {
       expect(seen).toContain(url);
     }
     expect(pages.find((p) => p.url === "/repo-baseline")?.section).toBe("Testing & Quality");

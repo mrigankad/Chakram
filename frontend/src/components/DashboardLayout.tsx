@@ -19,7 +19,6 @@ function readRailPreference(): boolean {
 }
 
 const FULL_BLEED_ROUTES = [
-  "/pipeline",
   "/workspace",
   "/ai-ide",
   "/prd",

@@ -48,10 +48,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { UnifiedTestIntelligence } from "@/components/pipeline/UnifiedTestIntelligence";
+import { UnifiedTestIntelligence } from "@/components/live-testing/UnifiedTestIntelligence";
 import { HealFailedTest } from "@/components/live-testing/HealFailedTest";
 import { useLiveTesting, useFetchCommits, useRunHistory, LiveTestingPhase, isLocalAnalysis } from "../hooks/use-live-testing";
-import { usePipelineContext } from "@/context/PipelineContext";
 import { useActiveRepo } from "@/context/RepoContext";
 import { api, baselineApi, PlaywrightTestCase, LiveTestResult, StepResult, CommitInfo, RunSummaryItem, RepoAnalysisResult, BaselineTest, WorkspacePlaywrightTest } from "../lib/api";
 import { downloadLiveTestReport, downloadRunSummaryReport } from "../lib/pdf-report";
@@ -501,13 +500,8 @@ function InputPhase({
   initialGithubUrl?: string;
   initialAppUrl?: string;
 }) {
-  let pipelinePat: string | undefined;
-  try {
-    const ctx = usePipelineContext();
-    pipelinePat = ctx.githubPat;
-  } catch (e) {
-    // Outside pipeline context
-  }
+  // The SDLC Pipeline stage that once supplied a GitHub PAT here was retired; the field is typed in.
+  const pipelinePat: string | undefined = undefined;
 
   const [inputMode, setInputMode] = useState<"ai" | "upload">("ai");
   const { activeRepo, setActiveRepo } = useActiveRepo();
@@ -1647,13 +1641,7 @@ export default function LiveTestRunner({
   /** Rendered inside another screen (the pipeline's Live Tests stage) that already has a title. */
   embedded?: boolean;
 } = {}) {
-  let pipelinePat: string | undefined;
-  try {
-    const ctx = usePipelineContext();
-    pipelinePat = ctx.githubPat;
-  } catch (e) {
-    // If used outside of PipelineProvider
-  }
+  const pipelinePat: string | undefined = undefined;
 
   // Read sessionStorage prefill once on mount (from ViewEntryTree wizard)
   const prefill = useMemo(() => readAndClearPrefill(), []); // eslint-disable-line react-hooks/exhaustive-deps
