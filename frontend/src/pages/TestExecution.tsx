@@ -40,6 +40,14 @@ const STEP_DOT: Record<string, string> = {
 const eyebrow = "font-sans text-[11px] font-medium uppercase tracking-[0.08em] text-ink-quaternary";
 const fieldLabel = "mb-1.5 block text-xs font-medium text-ink-secondary";
 
+function readQuery(key: string): string {
+  try {
+    return new URLSearchParams(window.location.search).get(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 function readStored(key: string): string {
   try {
     return localStorage.getItem(key) ?? "";
@@ -181,8 +189,9 @@ const TestExecution = () => {
     [requirementsQuery.data],
   );
 
-  const [requirementId, setRequirementId] = useState(() => readStored("lastRequirementId"));
-  const [targetUrl, setTargetUrl] = useState(() => readStored(TARGET_KEY));
+  // App Studio's "Test this app" opens this page with the requirement and the deployed URL.
+  const [requirementId, setRequirementId] = useState(() => readQuery("requirement") || readStored("lastRequirementId"));
+  const [targetUrl, setTargetUrl] = useState(() => readQuery("url") || readStored(TARGET_KEY));
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [replan, setReplan] = useState(false);

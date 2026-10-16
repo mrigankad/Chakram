@@ -91,3 +91,13 @@ Checks: backend 665 passed / 1 skipped; `npm run check:composed` and `npm run ch
 **Not done**: form and detail blocks (the UI for writes), uploads, jobs, webhooks, a Vercel function wrapper, and a live PostgreSQL run of the blueprint's BE 01–04 checks.
 
 **Next task:** T-070/T-071 (verify stage: spec-derived test cases against a built app; one TestRun shape across both engines) or T-030 (Chakram adopts the kit tokens).
+
+## 2026-10-16 — Phase V: verify what Build just made (T-070 done)
+
+Checks: backend 667 passed / 1 skipped; frontend tsc clean, 525 vitest passed, build passed.
+
+- `engines/spec_tests.py` turns a composed app's spec and seed into acceptance cases with no model call: open the home page and see the sidebar, navigate to each page, KPI tiles show figures (with the exact seeded count), tables list a named seeded row and search narrows them, charts and lists render, custom sections show no error box, unknown routes show the shell's placeholder.
+- `POST /api/ai-ide/workspace/{id}/test-cases` stores them as one requirement per app (`source: app_studio`, `workspace_id`) in the `test_cases` collection the Test Suite and Test Execution pages already read; a second call reuses it, `?refresh=true` regenerates.
+- App Studio's Deployed view gets **Test this app** once a deployment URL exists; it opens Test Execution with the requirement and the URL preselected, so the existing browser engine runs the cases against the deployed app.
+
+**Next task:** T-071 (one TestRun shape across both engines; Pipeline reads stored results) or T-030 (Chakram adopts the kit tokens). T-004 (dead code) and T-050 (kit controls) remain open.

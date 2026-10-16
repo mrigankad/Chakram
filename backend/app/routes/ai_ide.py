@@ -1,5 +1,6 @@
 """AI IDE routes workspace creation (REST) + streaming generation (WebSocket)."""
 import asyncio
+from datetime import datetime
 import io
 import json
 import re
@@ -154,6 +155,65 @@ async def create_workspace(
     files = ai_ide_service.list_file_paths(workspace_id)
     meta = ai_ide_service.require_org_workspace(org.id, workspace_id)
     return {"workspace_id": workspace_id, "file_paths": files, "pack_id": meta.get("pack_id")}
+
+
+# ── Verify a built app ───────────────────────────────────────────────────────
+
+@router.post("/workspace/{workspace_id}/test-cases", dependencies=[Depends(_attach_workspace)])
+async def create_test_cases_for_app(
+    workspace_id: str,
+    refresh: bool = False,
+    org: OrganizationOut = Depends(get_current_org),
+    db=Depends(get_db),
+):
+    """Acceptance cases for a composed app, derived from its spec (no model call).
+
+    Creates one requirement per app (reused on later calls unless `refresh`) with
+    the cases the Test Suite and Test Execution pages already understand.
+    """
+    import json as _json
+
+    from app.engines import spec_tests
+    from app.engines.spec import SpecError, normalize_spec
+    from app.services import test_case_service
+
+    _require_org_workspace(org, workspace_id)
+    files = ai_ide_service.get_workspace_files(workspace_id)
+    raw = files.get("app.spec.json")
+    if not raw:
+        raise HTTPException(status_code=409, detail="This app was not built from a spec, so test cases cannot be derived; use Requirements instead.")
+    try:
+        spec = normalize_spec(_json.loads(raw))
+    except (ValueError, SpecError) as exc:
+        raise HTTPException(status_code=409, detail=f"app.spec.json is not usable: {exc}") from exc
+    rows: dict = {}
+    try:
+        rows = _json.loads(files.get("api/src/seed.json") or "{}")
+    except ValueError:
+        rows = {}
+
+    existing = await db.requirements.find_one({"org_id": org.id, "workspace_id": workspace_id})
+    if existing is not None and not refresh:
+        count = await db.test_cases.count_documents({"org_id": org.id, "requirement_id": str(existing["_id"])})
+        return {"requirement_id": str(existing["_id"]), "test_cases": count, "created": False}
+
+    cases = spec_tests.test_cases_from_spec(spec, rows if isinstance(rows, dict) else {})
+    if existing is not None:
+        requirement_id = str(existing["_id"])
+        await db.test_cases.delete_many({"org_id": org.id, "requirement_id": requirement_id})
+        await db.requirements.update_one({"_id": existing["_id"]}, {"$set": {"text": spec_tests.requirement_text(spec), "status": "processed"}})
+    else:
+        result = await db.requirements.insert_one({
+            "org_id": org.id,
+            "text": spec_tests.requirement_text(spec),
+            "created_at": datetime.utcnow(),
+            "status": "processed",
+            "source": "app_studio",
+            "workspace_id": workspace_id,
+        })
+        requirement_id = str(result.inserted_id)
+    stored = await test_case_service.create_test_cases_from_ai(db, org.id, requirement_id, cases)
+    return {"requirement_id": requirement_id, "test_cases": stored, "created": existing is None}
 
 
 # ── Design packs ─────────────────────────────────────────────────────────────

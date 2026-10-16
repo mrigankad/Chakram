@@ -49,6 +49,7 @@ import { applyTextEdit, findOpeningTag, readClassName, setClassName } from "@/li
 import { downloadWorkspaceZip } from "@/lib/ai-ide-download";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { apiErrorMessage } from "@/lib/api-error";
 import { useAskDialog } from "@/components/ui/ask-dialog";
 
@@ -1279,6 +1280,8 @@ function IdeLayout({ idea, restored }: { idea: string; restored: boolean }) {
   }, []);
   const [redeployNonce, setRedeployNonce] = useState(0);
   const [leftPane, setLeftPane] = useState<LeftPaneKey>("explorer");
+  const navigate = useNavigate();
+  const [creatingTests, setCreatingTests] = useState(false);
   const [deployInfo, setDeployInfo] = useState<DeploymentInfo>({
     deployedUrl: null,
     deployStatus: null,
@@ -1512,6 +1515,31 @@ function IdeLayout({ idea, restored }: { idea: string; restored: boolean }) {
                           <span className="truncate">{deployInfo.stableDomain ?? normalizeDeploymentUrl(deployInfo.deployedUrl)}</span>
                           <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />
                         </a>
+                      )}
+                      {workspaceId && "app.spec.json" in files && (deployInfo.stableDomain ?? normalizeDeploymentUrl(deployInfo.deployedUrl)) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={creatingTests}
+                          title="Derive acceptance cases from the app's spec and run them against the deployment"
+                          onClick={async () => {
+                            const target = (deployInfo.stableDomain ?? normalizeDeploymentUrl(deployInfo.deployedUrl)) as string;
+                            setCreatingTests(true);
+                            try {
+                              const res = await apiClient.post<{ requirement_id: string; test_cases: number }>(
+                                `/ai-ide/workspace/${workspaceId}/test-cases`,
+                              );
+                              toast.success(`${res.data.test_cases} test cases ready`);
+                              navigate(`/test-execution?requirement=${encodeURIComponent(res.data.requirement_id)}&url=${encodeURIComponent(target)}`);
+                            } catch (error) {
+                              toast.error(errorDetail(error));
+                            } finally {
+                              setCreatingTests(false);
+                            }
+                          }}
+                        >
+                          {creatingTests ? "Preparing tests…" : "Test this app"}
+                        </Button>
                       )}
                     </div>
                   )}

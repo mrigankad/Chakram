@@ -373,12 +373,13 @@
         "REL 01",
         "REL 03"
       ],
-      "status": "todo",
+      "status": "done",
       "files": [
         "backend/app/services/test_case_service.py",
         "backend/app/services/execution_service.py",
         "backend/app/routes/ai_ide.py"
-      ]
+      ],
+      "evidence": "engines/spec_tests.py derives acceptance cases from app.spec.json + seed (no model call); POST /ai-ide/workspace/{id}/test-cases stores them as one requirement per app (source app_studio, workspace_id) in the existing test_cases shape; App Studio's Deployed view has 'Test this app' which opens Test Execution with the requirement and deployed URL preselected; tests/test_spec_tests.py"
     },
     {
       "id": "T-071",

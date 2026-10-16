@@ -195,6 +195,10 @@ PID only. Do not touch Docker containers other than `aidlc-mongo`.
   `engines/api_kit.py`, and `src/data/store.ts` (`useAppData()`: seed or live API via
   `VITE_API_URL`). `npm run check:api-kit` type-checks the golden kit with its pinned
   dependencies (CI).
+- **Test this app**: for a composed app, `POST /ai-ide/workspace/{id}/test-cases` derives
+  acceptance cases from `app.spec.json` (`engines/spec_tests.py`, no model call) into one
+  requirement per app, and the Deployed view opens Test Execution with that requirement and
+  the deployed URL preselected.
 - **Design packs** (`docs/chakram/DESIGN_PACKS.md`): a client's visual system as a zip
   (`pack.json`, `pack.css`, optional `README.md`, `brand/logo.svg`), validated and stored per
   org (`design_packs`), chosen when an app is created and installed under `src/design/`.
