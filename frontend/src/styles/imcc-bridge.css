@@ -14,7 +14,7 @@
  */
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   /* ── App aliases (components may use var(--color-*)) ───────────────── */
   --color-page: var(--surface-page-background);
@@ -56,109 +56,22 @@
   --color-status-neutral: var(--status-neutral);
   --color-status-content: var(--status-content);
 
-  /* Soft overlays (theme-aware washes) */
-  --overlay-faint: rgba(255, 255, 255, 0.04);
-  --overlay-soft: rgba(255, 255, 255, 0.06);
-  --overlay-medium: rgba(255, 255, 255, 0.1);
-  --overlay-selection: rgba(255, 255, 255, 0.16);
-  --shadow-elevated: 0 24px 60px rgba(0, 0, 0, 0.45);
-
-  /* ── Ink HSL channels (Tailwind text-ink* + opacity modifiers) ───────
-     Kept in lockstep with --text-* hex refs (gray-50 / 300 / 400 / 500). */
-  --ink: 0 0% 98%;
-  --ink-secondary: 0 0% 83%;
-  --ink-tertiary: 0 0% 64%;
-  --ink-quaternary: 0 0% 45%;
-  --ink-on-color: 0 0% 0%;
-
-  /* ── Typography ────────────────────────────────────────────────────── */
-  --font-sans: "Geist", "Geist Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Michroma", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
-
-  /* ── shadcn HSL (space-separated; wrap as hsl(var(--x) / <alpha>)) ───
-     primary fill ≈ action-primary (near-white on dark).
-     foreground / muted-foreground ≈ ink hierarchy. */
-  --background: 0 0% 0%;
-  --foreground: 0 0% 98%;
-
-  --card: 0 0% 6%;
-  --card-foreground: 0 0% 98%;
-
-  --popover: 0 0% 10%;
-  --popover-foreground: 0 0% 98%;
-
-  --primary: 0 0% 98%;
-  --primary-foreground: 0 0% 0%;
-
-  --secondary: 0 0% 14%;
-  --secondary-foreground: 0 0% 98%;
-
-  --muted: 0 0% 14%;
-  --muted-foreground: 0 0% 64%;
-
-  --accent: 0 0% 14%;
-  --accent-foreground: 0 0% 98%;
-
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 0 0% 100%;
-
-  --positive: 142 64% 30%;
-  --positive-foreground: 0 0% 100%;
-
-  --success: 142 64% 30%;
-  --success-foreground: 0 0% 100%;
-
-  --warning: 32 90% 37%;
-  --warning-foreground: 0 0% 100%;
-
-  --info: 217 91% 53%;
-  --info-foreground: 0 0% 100%;
-
-  --border: 0 0% 18%;
-  --input: 0 0% 18%;
-  --ring: 0 0% 64%;
-
-  --radius: 0.5rem;
-
-  --sidebar-background: 0 0% 6%;
-  --sidebar-foreground: 0 0% 80%;
-  --sidebar-primary: 0 0% 98%;
-  --sidebar-primary-foreground: 0 0% 0%;
-  --sidebar-accent: 0 0% 14%;
-  --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-border: 0 0% 16%;
-  --sidebar-ring: 0 0% 85%;
-
-  --brand-from: #f2f2f2;
-  --brand-via: #e5e5e5;
-  --brand-via-2: #d4d4d4;
-  --brand-to: #afafaf;
-
-  --glow-primary: 0 0% 98%;
-  --glow-secondary: 0 0% 70%;
-  --gradient-start: 0 0% 98%;
-  --gradient-end: 0 0% 70%;
-}
-
-/* Light next-themes sets class="light" on <html> */
-:root.light,
-.light {
-  color-scheme: light;
-
   --overlay-faint: rgba(0, 0, 0, 0.03);
   --overlay-soft: rgba(0, 0, 0, 0.05);
   --overlay-medium: rgba(0, 0, 0, 0.08);
   --overlay-selection: rgba(0, 0, 0, 0.12);
   --shadow-elevated: 0 24px 60px rgba(0, 0, 0, 0.12);
 
-  /* gray-950 / 700 / 650 / 600 */
+  /* ── Ink HSL channels (legacy hsl(var(--ink)) consumers; Tailwind's text-ink*
+     reads --color-primary… so a design pack reaches it) gray-950 / 700 / 650 / 600 */
   --ink: 0 0% 9%;
   --ink-secondary: 0 0% 25%;
   --ink-tertiary: 0 0% 32%;
   --ink-quaternary: 0 0% 38%;
   --ink-on-color: 0 0% 100%;
 
+  /* ── shadcn HSL (legacy hsl(var(--x)) consumers; the Tailwind colours of the
+     same names read the semantic tokens above, so a pack restyles them) ─── */
   --background: 0 0% 95%;
   --foreground: 0 0% 9%;
 
@@ -199,6 +112,8 @@
   --input: 0 0% 90%;
   --ring: 0 0% 45%;
 
+  --radius: var(--radius-lg, 8px);
+
   --sidebar-background: 0 0% 100%;
   --sidebar-foreground: 0 0% 25%;
   --sidebar-primary: 0 0% 9%;
@@ -219,10 +134,71 @@
   --gradient-end: 0 0% 40%;
 }
 
-/* Explicit dark class (next-themes) restate dark so light→dark is clean */
+/* Dark: next-themes sets class="dark" on <html>; the light values above are the
+   defaults, like the kit's tokens.css and a design pack's :root block. */
 :root.dark,
 .dark {
   color-scheme: dark;
+
+  /* Soft overlays (theme-aware washes) */
+  --overlay-faint: rgba(255, 255, 255, 0.04);
+  --overlay-soft: rgba(255, 255, 255, 0.06);
+  --overlay-medium: rgba(255, 255, 255, 0.1);
+  --overlay-selection: rgba(255, 255, 255, 0.16);
+  --shadow-elevated: 0 24px 60px rgba(0, 0, 0, 0.45);
+  /* ── Ink HSL channels (Tailwind text-ink* + opacity modifiers) ───────
+     Kept in lockstep with --text-* hex refs (gray-50 / 300 / 400 / 500). */
+  --ink: 0 0% 98%;
+  --ink-secondary: 0 0% 83%;
+  --ink-tertiary: 0 0% 64%;
+  --ink-quaternary: 0 0% 45%;
+  --ink-on-color: 0 0% 0%;
+  /* ── shadcn HSL (space-separated; wrap as hsl(var(--x) / <alpha>)) ───
+     primary fill ≈ action-primary (near-white on dark).
+     foreground / muted-foreground ≈ ink hierarchy. */
+  --background: 0 0% 0%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 6%;
+  --card-foreground: 0 0% 98%;
+  --popover: 0 0% 10%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 0 0% 14%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 0 0% 14%;
+  --muted-foreground: 0 0% 64%;
+  --accent: 0 0% 14%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --positive: 142 64% 30%;
+  --positive-foreground: 0 0% 100%;
+  --success: 142 64% 30%;
+  --success-foreground: 0 0% 100%;
+  --warning: 32 90% 37%;
+  --warning-foreground: 0 0% 100%;
+  --info: 217 91% 53%;
+  --info-foreground: 0 0% 100%;
+  --border: 0 0% 18%;
+  --input: 0 0% 18%;
+  --ring: 0 0% 64%;
+  --sidebar-background: 0 0% 6%;
+  --sidebar-foreground: 0 0% 80%;
+  --sidebar-primary: 0 0% 98%;
+  --sidebar-primary-foreground: 0 0% 0%;
+  --sidebar-accent: 0 0% 14%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 0 0% 16%;
+  --sidebar-ring: 0 0% 85%;
+  --brand-from: #f2f2f2;
+  --brand-via: #e5e5e5;
+  --brand-via-2: #d4d4d4;
+  --brand-to: #afafaf;
+  --glow-primary: 0 0% 98%;
+  --glow-secondary: 0 0% 70%;
+  --gradient-start: 0 0% 98%;
+  --gradient-end: 0 0% 70%;
 }
 
 /*

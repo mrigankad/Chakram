@@ -121,6 +121,9 @@ export interface DesignPackList {
 
 export const DESIGN_PACKS_QUERY_KEY = ["design-packs"] as const;
 
+import type { OrgTheme } from "@/lib/design-pack";
+export type { OrgTheme };
+
 // ─── Projects (one app = one project; docs/chakram/PRODUCT_DIRECTION.md section 1) ───
 
 export const PROJECTS_QUERY_KEY = ["projects"] as const;
@@ -1615,6 +1618,8 @@ export const api = {
     apiClient.put<ConnectorsPublic>("/orgs/current/connectors", body).then((r) => r.data),
   getConnectorStatus: () =>
     apiClient.get<{ connectors: ConnectorStatus[] }>("/orgs/current/connectors/status").then((r) => r.data.connectors),
+  /** The org's default design pack as custom properties; Chakram's UI applies them (lib/design-pack.ts). */
+  getOrgDesignPack: () => apiClient.get<OrgTheme>("/orgs/current/design-pack").then((r) => r.data),
   /** Probes the service with the resolved credentials; a failed probe is `ok: false` with a readable message. */
   checkConnector: (id: ConnectorStatusId) =>
     apiClient.post<ConnectorCheck>(`/orgs/current/connectors/${id}/check`).then((r) => r.data),

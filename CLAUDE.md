@@ -241,7 +241,11 @@ else is Geist. Panel titles are 11px uppercase tracked captions. Compose pages f
 `components/imcc/Panel.tsx` (Panel, KpiStat), `components/imcc/StatusBadge.tsx`,
 `PageHeader`, `PageCard` and `dashboard/DashboardUi.tsx`; use the semantic classes
 (`bg-page`, `bg-container`, `bg-raised`, `text-ink*`, `border-stroke-muted`), never raw
-palette colours or gradients. Light is the default theme; dark is a toggle.
+palette colours or gradients. Light is the default theme (`:root` in
+`styles/imcc-tokens.css`); dark is the `.dark` class next-themes sets. The tokens carry the
+Chronos kit's names and every Tailwind colour, including the shadcn ones, reads them, so the
+org's default design pack restyles Chakram itself (`components/OrgDesignPack.tsx`,
+`GET /orgs/current/design-pack`); see `docs/chakram/DESIGN_PACKS.md`.
 
 ## Environment variables
 

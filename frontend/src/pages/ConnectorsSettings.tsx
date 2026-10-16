@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAskDialog } from "@/components/ui/ask-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ORG_THEME_QUERY_KEY } from "@/lib/design-pack";
 import { ORG_CONNECTORS_QUERY_KEY } from "@/hooks/use-org-connectors";
 import {
   CONNECTOR_STATUS_QUERY_KEY,
@@ -248,9 +249,10 @@ function PackRow({
 }
 
 /**
- * Settings → Design System: the design packs new App Builder apps can be created
- * with. The built-in Chronos pack is always there; an organization can upload its
- * own as a zip and make it the default for new apps.
+ * Settings → Design System: the design packs new App Builder apps are created with.
+ * The built-in Chronos pack is always there; an organization can upload its own as a
+ * zip and make it the default. The default pack also styles Chakram itself
+ * (components/OrgDesignPack.tsx), so the client sees one visual system end to end.
  */
 function DesignSystemSection() {
   const queryClient = useQueryClient();
@@ -262,7 +264,10 @@ function DesignSystemSection() {
   const [busyPack, setBusyPack] = useState<{ id: string; action: "default" | "delete" } | null>(null);
 
   const packsQuery = useQuery({ queryKey: DESIGN_PACKS_QUERY_KEY, queryFn: api.listDesignPacks });
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: DESIGN_PACKS_QUERY_KEY });
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ORG_THEME_QUERY_KEY }); // Chakram itself wears the default pack
+    return queryClient.invalidateQueries({ queryKey: DESIGN_PACKS_QUERY_KEY });
+  };
 
   const uploadMutation = useMutation({
     mutationFn: (pack: File) => api.uploadDesignPack(pack),
@@ -271,7 +276,7 @@ function DesignSystemSection() {
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       toast.success(`Design pack "${res.pack.name}" uploaded`, {
-        description: res.pack.is_default ? "It is the default for new apps." : "Make it the default to use it for new apps.",
+        description: res.pack.is_default ? "It is the default for new apps and for Chakram." : "Make it the default to use it for new apps and for Chakram.",
       });
       void invalidate();
     },
@@ -319,7 +324,7 @@ function DesignSystemSection() {
         </span>
         {packsQuery.data && (
           <span className="truncate text-[11px] text-ink-quaternary">
-            New apps use {packs.find((p) => p.id === packsQuery.data.default_id)?.name ?? packsQuery.data.default_id}
+            Chakram and new apps use {packs.find((p) => p.id === packsQuery.data.default_id)?.name ?? packsQuery.data.default_id}
           </span>
         )}
       </header>

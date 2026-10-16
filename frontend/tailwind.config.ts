@@ -17,6 +17,16 @@ import typography from "@tailwindcss/typography";
  * Do NOT use text-secondary for muted copy shadcn secondary is a FILL.
  * Use text-ink-secondary or text-muted-foreground instead.
  */
+/**
+ * A colour that follows a CSS custom property and still takes Tailwind's opacity
+ * modifier (`bg-page/50`): `<alpha-value>` becomes the modifier (1 when absent).
+ * The tokens are colours in any notation (hex, rgba, var chains), which is why this
+ * uses color-mix rather than the hsl(var()) channel convention.
+ */
+function tone(variable: string): string {
+  return `color-mix(in srgb, var(${variable}) calc(<alpha-value> * 100%), transparent)`;
+}
+
 export default {
   darkMode: ["class"],
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
@@ -31,20 +41,21 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['"Michroma"', "var(--font-display)", "sans-serif"],
-        sans: ['"Geist"', '"Geist Sans"', "var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-        body: ['"Geist"', '"Geist Sans"', "var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-        mono: ['"JetBrains Mono"', "var(--font-mono)", "monospace"],
+        /* The design pack sets --font-* (see styles/imcc-tokens.css); the named faces are the Chronos defaults. */
+        display: ["var(--font-display)", '"Michroma"', "sans-serif"],
+        sans: ["var(--font-sans)", '"Geist"', '"Geist Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
+        body: ["var(--font-sans)", '"Geist"', '"Geist Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", '"JetBrains Mono"', "monospace"],
       },
       backgroundImage: {
         "gradient-brand": "linear-gradient(90deg, var(--brand-from) 0%, var(--brand-via) 50%, var(--brand-to) 100%)",
       },
       colors: {
-        page: "var(--color-page)",
-        container: "var(--color-container)",
-        raised: "var(--color-raised)",
-        "raised-2": "var(--color-raised-2)",
-        action: "var(--color-action)",
+        page: tone("--color-page"),
+        container: tone("--color-container"),
+        raised: tone("--color-raised"),
+        "raised-2": tone("--color-raised-2"),
+        action: tone("--color-action"),
         brand: {
           from: "var(--brand-from)",
           via: "var(--brand-via)",
@@ -53,75 +64,76 @@ export default {
         },
         /* IMCC text hierarchy use these for copy, not shadcn secondary */
         ink: {
-          DEFAULT: "hsl(var(--ink) / <alpha-value>)",
-          secondary: "hsl(var(--ink-secondary) / <alpha-value>)",
-          tertiary: "hsl(var(--ink-tertiary) / <alpha-value>)",
-          quaternary: "hsl(var(--ink-quaternary) / <alpha-value>)",
-          "on-color": "hsl(var(--ink-on-color) / <alpha-value>)",
+          DEFAULT: tone("--color-primary"),
+          secondary: tone("--color-secondary"),
+          tertiary: tone("--color-tertiary"),
+          quaternary: tone("--color-quaternary"),
+          "on-color": tone("--color-on-color"),
         },
         stroke: {
           DEFAULT: "var(--color-stroke)",
           active: "var(--color-stroke-active)",
           muted: "var(--color-stroke-muted)",
         },
-        border: "hsl(var(--border) / <alpha-value>)",
-        input: "hsl(var(--input) / <alpha-value>)",
-        ring: "hsl(var(--ring) / <alpha-value>)",
-        background: "hsl(var(--background) / <alpha-value>)",
-        foreground: "hsl(var(--foreground) / <alpha-value>)",
+        /* shadcn names, mapped onto the semantic tokens so one design pack restyles everything. */
+        border: tone("--color-stroke-muted"),
+        input: tone("--color-stroke"),
+        ring: tone("--color-stroke-active"),
+        background: tone("--color-page"),
+        foreground: tone("--color-primary"),
         primary: {
-          DEFAULT: "hsl(var(--primary) / <alpha-value>)",
-          foreground: "hsl(var(--primary-foreground) / <alpha-value>)",
+          DEFAULT: tone("--color-action-primary"),
+          foreground: tone("--color-action-primary-content"),
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary) / <alpha-value>)",
-          foreground: "hsl(var(--secondary-foreground) / <alpha-value>)",
+          DEFAULT: tone("--color-action-secondary"),
+          foreground: tone("--color-action-secondary-content"),
         },
         destructive: {
-          DEFAULT: "hsl(var(--destructive) / <alpha-value>)",
-          foreground: "hsl(var(--destructive-foreground) / <alpha-value>)",
+          DEFAULT: tone("--color-error"),
+          foreground: tone("--color-on-color"),
         },
         success: {
-          DEFAULT: "hsl(var(--success) / <alpha-value>)",
-          foreground: "hsl(var(--success-foreground) / <alpha-value>)",
+          DEFAULT: tone("--color-success"),
+          foreground: tone("--color-on-color"),
         },
         positive: {
-          DEFAULT: "hsl(var(--positive) / <alpha-value>)",
-          foreground: "hsl(var(--positive-foreground) / <alpha-value>)",
+          DEFAULT: tone("--color-success"),
+          foreground: tone("--color-on-color"),
         },
         warning: {
-          DEFAULT: "hsl(var(--warning) / <alpha-value>)",
-          foreground: "hsl(var(--warning-foreground) / <alpha-value>)",
+          DEFAULT: tone("--color-warning"),
+          foreground: tone("--color-on-color"),
         },
         info: {
-          DEFAULT: "hsl(var(--info) / <alpha-value>)",
-          foreground: "hsl(var(--info-foreground) / <alpha-value>)",
+          DEFAULT: tone("--color-info"),
+          foreground: tone("--color-on-color"),
         },
         muted: {
-          DEFAULT: "hsl(var(--muted) / <alpha-value>)",
-          foreground: "hsl(var(--muted-foreground) / <alpha-value>)",
+          DEFAULT: tone("--color-raised"),
+          foreground: tone("--color-tertiary"),
         },
         accent: {
-          DEFAULT: "hsl(var(--accent) / <alpha-value>)",
-          foreground: "hsl(var(--accent-foreground) / <alpha-value>)",
+          DEFAULT: tone("--color-action"),
+          foreground: tone("--color-primary"),
         },
         popover: {
-          DEFAULT: "hsl(var(--popover) / <alpha-value>)",
-          foreground: "hsl(var(--popover-foreground) / <alpha-value>)",
+          DEFAULT: tone("--color-container"),
+          foreground: tone("--color-primary"),
         },
         card: {
-          DEFAULT: "hsl(var(--card) / <alpha-value>)",
-          foreground: "hsl(var(--card-foreground) / <alpha-value>)",
+          DEFAULT: tone("--color-container"),
+          foreground: tone("--color-primary"),
         },
         sidebar: {
-          DEFAULT: "hsl(var(--sidebar-background) / <alpha-value>)",
-          foreground: "hsl(var(--sidebar-foreground) / <alpha-value>)",
-          primary: "hsl(var(--sidebar-primary) / <alpha-value>)",
-          "primary-foreground": "hsl(var(--sidebar-primary-foreground) / <alpha-value>)",
-          accent: "hsl(var(--sidebar-accent) / <alpha-value>)",
-          "accent-foreground": "hsl(var(--sidebar-accent-foreground) / <alpha-value>)",
-          border: "hsl(var(--sidebar-border) / <alpha-value>)",
-          ring: "hsl(var(--sidebar-ring) / <alpha-value>)",
+          DEFAULT: tone("--color-container"),
+          foreground: tone("--color-secondary"),
+          primary: tone("--color-action-primary"),
+          "primary-foreground": tone("--color-action-primary-content"),
+          accent: tone("--color-action"),
+          "accent-foreground": tone("--color-primary"),
+          border: tone("--color-stroke-muted"),
+          ring: tone("--color-stroke-active"),
         },
         status: {
           critical: "var(--color-status-critical)",
@@ -138,9 +150,17 @@ export default {
           error: "var(--color-error)",
           info: "var(--color-info)",
         },
+        series: {
+          1: "var(--analytics-series-1)",
+          2: "var(--analytics-series-2)",
+          3: "var(--analytics-series-3)",
+          4: "var(--analytics-series-4)",
+          5: "var(--analytics-series-5)",
+          6: "var(--analytics-series-6)",
+        },
       },
       borderRadius: {
-        lg: "var(--radius)",
+        lg: "var(--radius)" /* = --radius-lg, set by the design pack */,
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },

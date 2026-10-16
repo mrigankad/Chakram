@@ -163,10 +163,151 @@
 /* ==========================================================================
    SEMANTIC TOKENS
    Intent-based tokens. Components consume these never raw --ref-* values.
-   Dark is the default; :root.light overrides when next-themes sets class="light".
+   Light is the default document (same as the Chronos kit and a design pack's
+   :root block); `.dark` below holds the dark values next-themes applies with
+   class="dark" on <html>. Names match src/chronos/tokens.css in generated
+   apps, so the org's design pack restyles Chakram and its apps alike
+   (backend/tests/test_design_packs.py checks the vocabulary).
    ========================================================================== */
 
 :root {
+  /* --- Text ---------------------------------------------------------- */
+  --text-primary: var(--ref-gray-950);
+  --text-secondary: var(--ref-gray-700);
+  /* The light theme was the worse of the two: tertiary bottomed out at 2.74:1
+     and quaternary at 1.74:1, which is not dim, it is unreadable. Darkening
+     both puts every level over 4.5:1 on all four surfaces (worst case 4.84:1).
+     The cost is a tighter ladder 700/650/600 sit closer together than their
+     dark-mode counterparts because near-white surfaces simply do not leave
+     room for four well-separated greys that all clear AA. Legibility wins;
+     if more separation is needed, drop a level rather than lighten one. */
+  --text-tertiary: var(--ref-gray-650);
+  --text-quaternary: var(--ref-gray-600);
+  --text-on-color: var(--ref-white);
+
+  /* --- Icon ------------------------------------------------------------ */
+  --icon-primary: var(--ref-gray-950);
+  --icon-secondary: var(--ref-gray-700);
+  --icon-tertiary: var(--ref-gray-650);
+  --icon-quaternary: var(--ref-gray-600);
+  --icon-on-color: var(--ref-white);
+
+  /* --- Stroke ------------------------------------------------------------ */
+  --stroke-default: rgba(0, 0, 0, 0.14);
+  --stroke-active: rgba(0, 0, 0, 0.24);
+  --stroke-muted: rgba(0, 0, 0, 0.08);
+  --stroke-disabled: rgba(0, 0, 0, 0.04);
+  --stroke-on-color: rgba(255, 255, 255, 0.24);
+
+  /* --- Surface ------------------------------------------------------------ */
+  --surface-page-background: var(--ref-gray-100);
+  --surface-container: var(--ref-white);
+  --surface-raised: var(--ref-gray-50);
+  --surface-raised-x2: var(--ref-gray-100);
+  --surface-action: var(--ref-gray-100);
+  --surface-scroll-bar: var(--ref-gray-300);
+  --surface-scroll-bar-hover: var(--ref-gray-650);
+
+  /* --- Action surface ------------------------------------------------------------ */
+  --action-primary-default: var(--ref-gray-950);
+  --action-primary-hover: var(--ref-gray-800);
+  --action-primary-focused: var(--ref-black);
+  --action-primary-disabled: var(--ref-gray-300);
+  --action-primary-content: var(--ref-white);
+
+  --action-secondary-default: var(--ref-gray-100);
+  --action-secondary-hover: var(--ref-gray-200);
+  --action-secondary-focused: var(--ref-gray-300);
+  --action-secondary-disabled: var(--ref-gray-50);
+  --action-secondary-content: var(--ref-gray-950);
+
+  --action-tertiary-default: transparent;
+  --action-tertiary-hover: rgba(0, 0, 0, 0.06);
+  --action-tertiary-focused: rgba(0, 0, 0, 0.1);
+  --action-tertiary-disabled: transparent;
+  --action-tertiary-content: var(--ref-gray-700);
+
+  /* --- Feedback -----------------------------------------------------------
+     On white, dark-mode content steps fail AA; use status-pill fills (already
+     tuned against white) for content/icon. Soft backgrounds stay tinted. */
+  --feedback-success-content: var(--status-success);
+  --feedback-success-icon: var(--status-success);
+  --feedback-success-stroke: var(--status-success);
+  --feedback-success-background: rgba(21, 128, 61, 0.1);
+
+  /* --- Feedback: Info ------------------------------------------------------------ */
+  --feedback-info-content: var(--status-info);
+  --feedback-info-icon: var(--status-info);
+  --feedback-info-stroke: var(--status-info);
+  --feedback-info-background: rgba(37, 99, 235, 0.1);
+
+  /* --- Feedback: Neutral ------------------------------------------------------------ */
+  --feedback-neutral-content: var(--ref-gray-700);
+  --feedback-neutral-icon: var(--ref-gray-650);
+  --feedback-neutral-stroke: var(--ref-gray-400);
+  --feedback-neutral-background: rgba(0, 0, 0, 0.05);
+
+  --feedback-warning-content: var(--status-warning);
+  --feedback-warning-icon: var(--status-warning);
+  --feedback-warning-stroke: var(--status-warning);
+  --feedback-warning-background: rgba(180, 83, 9, 0.1);
+
+  --feedback-error-content: var(--status-critical);
+  --feedback-error-icon: var(--status-critical);
+  --feedback-error-stroke: var(--status-critical);
+  --feedback-error-background: rgba(220, 38, 38, 0.1);
+
+  /* --- Feedback: badges ------------------------------------------------------------
+     Solid badge fills with white content; the kit's StatusBadge and charts read
+     these, so a design pack that sets them restyles Chakram and its apps alike. */
+  --feedback-success-badge: var(--ref-green-700);
+  --feedback-info-badge: var(--ref-blue-700);
+  --feedback-neutral-badge: var(--ref-gray-700);
+  --feedback-warning-badge: var(--ref-orange-700);
+  --feedback-error-badge: var(--ref-red-700);
+  --feedback-badge-content: var(--ref-white);
+
+  /* --- Analytics series ------------------------------------------------------------ */
+  --analytics-series-1: var(--feedback-info-icon);
+  --analytics-series-2: var(--feedback-success-icon);
+  --analytics-series-3: var(--feedback-warning-icon);
+  --analytics-series-4: var(--feedback-error-icon);
+  --analytics-series-5: var(--feedback-neutral-icon);
+  --analytics-series-6: var(--ref-purple-600);
+
+  /* --- Shape and type (a design pack sets these from pack.json) ------------------- */
+  --radius-lg: 8px;
+  --font-sans: "Geist", "Geist Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Michroma", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* --- Status pills ----------------------------------------------------------------
+     Solid fills carrying white text, used by <StatusBadge/> and nothing else.
+     Deliberately separate from the --feedback-* set above: those are the quiet
+     tinted surfaces used for inline emphasis, these are the loud, instantly
+     recognisable state chips. One place to change a status colour globally.
+
+     Contrast is against white text, WCAG AA needs 4.5:1 for text this size.
+     Amber and green are one step darker than the brief's #F59E0B / #16A34A,
+     which measure 2.15:1 and 3.30:1 against white both unreadable. The
+     values below keep the same hue and clear 4.5:1.
+     -------------------------------------------------------------------------------- */
+  --status-critical: #dc2626; /* 4.83:1 */
+  --status-warning: #b45309; /* 5.02:1  (brief: #f59e0b, 2.15:1) */
+  --status-success: #15803d; /* 5.02:1  (brief: #16a34a, 3.30:1) */
+  --status-info: #2563eb; /* 5.17:1 */
+  --status-pending: #7c3aed; /* 6.01:1 */
+  --status-neutral: #6b7280; /* 4.83:1 */
+  --status-content: #ffffff;
+}
+
+/* ==========================================================================
+   DARK MODE
+   Applied when next-themes puts `.dark` on <html>.
+   ========================================================================== */
+
+:root.dark,
+.dark {
   /* --- Text ---------------------------------------------------------- */
   --text-primary: var(--ref-gray-50);
   --text-secondary: var(--ref-gray-300);
@@ -214,19 +355,16 @@
   --action-primary-focused: var(--ref-white);
   --action-primary-disabled: var(--ref-gray-700);
   --action-primary-content: var(--ref-black);
-
   --action-secondary-default: var(--ref-gray-850);
   --action-secondary-hover: var(--ref-gray-800);
   --action-secondary-focused: var(--ref-gray-750);
   --action-secondary-disabled: var(--ref-gray-950);
   --action-secondary-content: var(--ref-gray-50);
-
   --action-tertiary-default: transparent;
   --action-tertiary-hover: rgba(255, 255, 255, 0.06);
   --action-tertiary-focused: rgba(255, 255, 255, 0.1);
   --action-tertiary-disabled: transparent;
   --action-tertiary-content: var(--ref-gray-300);
-
   /* --- Feedback: Success ------------------------------------------------------------
      Coloured text and icons use the status-badge value itself, not a tint of
      it, so "87%" on a card is the same green as the Success pill beside it.
@@ -247,7 +385,6 @@
   --feedback-neutral-icon: var(--ref-gray-400);
   --feedback-neutral-stroke: var(--ref-gray-650);
   --feedback-neutral-background: rgba(255, 255, 255, 0.06);
-
   /* --- Feedback: Warning ------------------------------------------------------------
      Amber rather than orange: the warning pill's fill is amber-700, and a
      peach caption above an amber chip read as two different states. */
@@ -255,7 +392,6 @@
   --feedback-warning-icon: var(--ref-amber-500);
   --feedback-warning-stroke: var(--ref-amber-700);
   --feedback-warning-background: rgba(245, 158, 11, 0.12);
-
   /* --- Feedback: Error ------------------------------------------------------------
      Step 500 rather than the pill's 600: #dc2626 as text on the container
      measures 3.98:1, under AA. #ef4444 is the same red one step up and
@@ -265,111 +401,14 @@
   --feedback-error-stroke: var(--ref-red-700);
   --feedback-error-background: rgba(239, 68, 68, 0.12);
 
-  /* --- Status pills ----------------------------------------------------------------
-     Solid fills carrying white text, used by <StatusBadge/> and nothing else.
-     Deliberately separate from the --feedback-* set above: those are the quiet
-     tinted surfaces used for inline emphasis, these are the loud, instantly
-     recognisable state chips. One place to change a status colour globally.
+  /* --- Feedback: badges ------------------------------------------------------------ */
+  --feedback-success-badge: var(--ref-green-800);
+  --feedback-info-badge: var(--ref-blue-800);
+  --feedback-warning-badge: var(--ref-orange-800);
+  --feedback-error-badge: var(--ref-red-800);
 
-     Contrast is against white text, WCAG AA needs 4.5:1 for text this size.
-     Amber and green are one step darker than the brief's #F59E0B / #16A34A,
-     which measure 2.15:1 and 3.30:1 against white both unreadable. The
-     values below keep the same hue and clear 4.5:1.
-     -------------------------------------------------------------------------------- */
-  --status-critical: #dc2626; /* 4.83:1 */
-  --status-warning: #b45309; /* 5.02:1  (brief: #f59e0b, 2.15:1) */
-  --status-success: #15803d; /* 5.02:1  (brief: #16a34a, 3.30:1) */
-  --status-info: #2563eb; /* 5.17:1 */
-  --status-pending: #7c3aed; /* 6.01:1 */
-  --status-neutral: #6b7280; /* 4.83:1 */
-  --status-content: #ffffff;
-}
-
-/* ==========================================================================
-   LIGHT MODE OVERRIDES
-   Applied when next-themes puts `.light` on <html>. Dark values above
-   remain the defaults (this product is dark-mode-first).
-   ========================================================================== */
-
-:root.light {
-  --text-primary: var(--ref-gray-950);
-  --text-secondary: var(--ref-gray-700);
-  /* The light theme was the worse of the two: tertiary bottomed out at 2.74:1
-     and quaternary at 1.74:1, which is not dim, it is unreadable. Darkening
-     both puts every level over 4.5:1 on all four surfaces (worst case 4.84:1).
-     The cost is a tighter ladder 700/650/600 sit closer together than their
-     dark-mode counterparts because near-white surfaces simply do not leave
-     room for four well-separated greys that all clear AA. Legibility wins;
-     if more separation is needed, drop a level rather than lighten one. */
-  --text-tertiary: var(--ref-gray-650);
-  --text-quaternary: var(--ref-gray-600);
-  --text-on-color: var(--ref-white);
-
-  --icon-primary: var(--ref-gray-950);
-  --icon-secondary: var(--ref-gray-700);
-  --icon-tertiary: var(--ref-gray-650);
-  --icon-quaternary: var(--ref-gray-600);
-  --icon-on-color: var(--ref-white);
-
-  --stroke-default: rgba(0, 0, 0, 0.14);
-  --stroke-active: rgba(0, 0, 0, 0.24);
-  --stroke-muted: rgba(0, 0, 0, 0.08);
-  --stroke-disabled: rgba(0, 0, 0, 0.04);
-  --stroke-on-color: rgba(255, 255, 255, 0.24);
-
-  --surface-page-background: var(--ref-gray-100);
-  --surface-container: var(--ref-white);
-  --surface-raised: var(--ref-gray-50);
-  --surface-raised-x2: var(--ref-gray-100);
-  --surface-action: var(--ref-gray-100);
-  --surface-scroll-bar: var(--ref-gray-300);
-  --surface-scroll-bar-hover: var(--ref-gray-650);
-
-  --action-primary-default: var(--ref-gray-950);
-  --action-primary-hover: var(--ref-gray-800);
-  --action-primary-focused: var(--ref-black);
-  --action-primary-disabled: var(--ref-gray-300);
-  --action-primary-content: var(--ref-white);
-
-  --action-secondary-default: var(--ref-gray-100);
-  --action-secondary-hover: var(--ref-gray-200);
-  --action-secondary-focused: var(--ref-gray-300);
-  --action-secondary-disabled: var(--ref-gray-50);
-  --action-secondary-content: var(--ref-gray-950);
-
-  --action-tertiary-default: transparent;
-  --action-tertiary-hover: rgba(0, 0, 0, 0.06);
-  --action-tertiary-focused: rgba(0, 0, 0, 0.1);
-  --action-tertiary-disabled: transparent;
-  --action-tertiary-content: var(--ref-gray-700);
-
-  /* --- Feedback -----------------------------------------------------------
-     On white, dark-mode content steps fail AA; use status-pill fills (already
-     tuned against white) for content/icon. Soft backgrounds stay tinted. */
-  --feedback-success-content: var(--status-success);
-  --feedback-success-icon: var(--status-success);
-  --feedback-success-stroke: var(--status-success);
-  --feedback-success-background: rgba(21, 128, 61, 0.1);
-
-  --feedback-info-content: var(--status-info);
-  --feedback-info-icon: var(--status-info);
-  --feedback-info-stroke: var(--status-info);
-  --feedback-info-background: rgba(37, 99, 235, 0.1);
-
-  --feedback-neutral-content: var(--ref-gray-700);
-  --feedback-neutral-icon: var(--ref-gray-650);
-  --feedback-neutral-stroke: var(--ref-gray-400);
-  --feedback-neutral-background: rgba(0, 0, 0, 0.05);
-
-  --feedback-warning-content: var(--status-warning);
-  --feedback-warning-icon: var(--status-warning);
-  --feedback-warning-stroke: var(--status-warning);
-  --feedback-warning-background: rgba(180, 83, 9, 0.1);
-
-  --feedback-error-content: var(--status-critical);
-  --feedback-error-icon: var(--status-critical);
-  --feedback-error-stroke: var(--status-critical);
-  --feedback-error-background: rgba(220, 38, 38, 0.1);
+  /* --- Analytics series ------------------------------------------------------------ */
+  --analytics-series-6: var(--ref-purple-400);
 }
 
 /* ==========================================================================

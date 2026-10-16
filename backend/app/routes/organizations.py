@@ -5,7 +5,7 @@ from typing import Any, Optional
 from app.auth.dependencies import get_current_org
 from app.database import get_db
 from app.models.organization import OrganizationOut
-from app.services import connector_registry
+from app.services import connector_registry, design_pack_service
 from app.services import connector_settings_service as connectors
 
 router = APIRouter(prefix="/orgs", tags=["Organizations"])
@@ -60,3 +60,9 @@ async def check_connector(connector_id: str, org: OrganizationOut = Depends(get_
         return await connector_registry.run_check(db, org, connector_id)
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Unknown connector '{connector_id}'")
+
+
+@router.get("/current/design-pack")
+async def current_design_pack(org: OrganizationOut = Depends(get_current_org), db=Depends(get_db)):
+    """The org's default design pack as theme variables; Chakram's UI applies them on top of its own tokens."""
+    return await design_pack_service.org_theme(db, org.id)

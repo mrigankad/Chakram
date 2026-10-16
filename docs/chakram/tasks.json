@@ -265,13 +265,17 @@
       "acceptance": [
         "OPS 02"
       ],
-      "status": "todo",
+      "status": "done",
       "files": [
+        "frontend/src/styles/imcc-tokens.css",
+        "frontend/src/styles/imcc-bridge.css",
         "frontend/tailwind.config.ts",
-        "frontend/src/styles/*",
-        "frontend/src/pages/*",
-        "frontend/src/components/*"
-      ]
+        "frontend/src/lib/design-pack.ts",
+        "frontend/src/components/OrgDesignPack.tsx",
+        "backend/app/services/design_pack_service.py",
+        "backend/app/routes/organizations.py"
+      ],
+      "notes": "Light-first tokens with the kit's names; Tailwind colours read the tokens via color-mix; GET /orgs/current/design-pack applied after sign-in. Vocabulary drift test in test_design_packs.py. Bridge HSL aliases kept for legacy hsl(var()) consumers; Chakram's logo not packed."
     },
     {
       "id": "T-040",

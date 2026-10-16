@@ -128,3 +128,16 @@ Checks: backend 677 passed / 1 skipped; frontend tsc clean, 537 vitest passed, b
 **Not done**: a `detail` block (edit/delete one row), a live PostgreSQL run of the blueprint's BE 01–04 checks, and the Pipeline page still shows the old demo stages (the project view supersedes it; retire or redirect it in the cleanup slice).
 
 **Next task:** T-030 (Chakram adopts the kit tokens and the org's pack) or T-140 (Jira narrowed to story import and write-back; Sprint Health retired).
+
+## 2026-10-16 — Chakram wears the pack (T-030 done)
+
+Checks: backend 680 passed / 1 skipped; frontend tsc clean, 540 vitest passed, build passed. Rendered with Playwright against the production build: the login page in light (default), dark, and with a simulated client pack (red primary, serif font, 4px radius); the signed-in dashboard with a stubbed API in Chronos and in the pack (active sidebar item, surfaces and radius follow the pack).
+
+- Chakram's tokens are light-first (`:root`) with dark under `.dark`, and carry the kit's names, including the ones Chakram lacked (`--feedback-*-badge`, `--analytics-series-*`, `--radius-lg`, `--font-*`). GAP-09 and GAP-24 closed.
+- Every Tailwind colour reads the semantic tokens through `color-mix` with opacity support, the shadcn names included (`bg-primary` is the action colour, `border-border` the muted stroke, `bg-muted` the raised surface). Pages did not change.
+- `GET /api/orgs/current/design-pack` returns the org's default pack as custom properties by mode plus font links; `OrgDesignPack` applies it after sign-in and removes it at sign-out. Settings → Design System says the default styles Chakram and new apps, and switching it restyles Chakram at once.
+- A backend test fails when a name a pack can set is neither defined nor read by Chakram's stylesheets, so the two vocabularies cannot drift apart again.
+
+**Not done**: Chakram's logo and name are not taken from the pack (white-label is a separate decision); the bridge's HSL aliases remain for the few `hsl(var(--border))` consumers in TSX (they stay Chronos grey under a pack).
+
+**Next task:** T-140 (Jira narrowed to story import and write-back; Sprint Health retired).

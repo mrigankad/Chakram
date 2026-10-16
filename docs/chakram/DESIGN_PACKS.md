@@ -64,6 +64,29 @@ index.html                    font <link>s between the DESIGN_FONTS markers; dat
 
 The kit upgrade (`kit.outdated_kit_files`) replaces only `src/chronos/*`, so a pack survives every kit release. The Design tab's theme editor writes `src/design.css`, which loads last: it is a per-app delta over the pack, and the pack itself is never edited inside an app. Downloads and GitHub pushes carry `src/design/` like any other source.
 
+## Chakram wears the pack too
+
+The org's default pack styles Chakram's own UI, not only the apps it builds, so a client
+sees one visual system from the first login to the deployed app.
+
+- Chakram's tokens (`frontend/src/styles/imcc-tokens.css`) use the kit's names: light values
+  on `:root`, dark on `.dark` (next-themes), the same `--surface-*`, `--text-*`, `--action-*`,
+  `--feedback-*`, `--analytics-series-*`, `--font-*` and `--radius-lg` a pack sets.
+  `backend/tests/test_design_packs.py::test_chakrams_own_tokens_consume_every_name_a_pack_can_set`
+  fails when a name a pack can set is neither defined nor read by Chakram.
+- Tailwind's colours (`tailwind.config.ts`) read those tokens through `color-mix`, so
+  `bg-page`, `text-ink`, `bg-primary`, `border-border/60` and the shadcn names all follow the
+  pack; nothing in a page has to change.
+- `GET /api/orgs/current/design-pack` returns the default pack as `{ id, name, mode, fonts,
+  light, dark }` (custom properties by mode, plus the fonts and radius from `pack.json`).
+  `components/OrgDesignPack.tsx` applies it after sign-in (`lib/design-pack.ts`: one `<style
+  id="org-design-pack">` and the Google Fonts links) and removes it on sign-out, so the login
+  page is always Chronos. Changing the default in Settings → Design System restyles Chakram
+  at once.
+- Not covered: Chakram's own logo and product name stay Chakram's (white-labelling is a
+  separate decision), and the dark toggle uses the pack's `[data-theme="dark"]` block, which
+  a pack may leave empty (Chronos dark values then apply).
+
 ## Making the Mahindra pack
 
 1. Start from `backend/app/templates/design_packs/chronos/` and the test fixture in `backend/tests/test_design_packs.py` (`ACME_CSS` lists every semantic token with concrete values).
@@ -82,5 +105,6 @@ The kit upgrade (`kit.outdated_kit_files`) replaces only `src/chronos/*`, so a p
 | POST | `/api/ai-ide/design-packs/{id}/default` | — | `{ ok, default_id }` |
 | DELETE | `/api/ai-ide/design-packs/{id}` | — | `{ ok }` (org packs only) |
 | POST | `/api/ai-ide/workspace/create` | `{ pack_id? }` | `{ workspace_id, file_paths, pack_id }` |
+| GET | `/api/orgs/current/design-pack` | — | `{ id, name, mode, fonts, light, dark }` for Chakram's own UI |
 
 Org packs are stored in the `design_packs` collection (one document per org and id, files inline, text only). The org's default lives on its `organizations` document (`design_pack_default`).

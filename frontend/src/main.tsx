@@ -4,6 +4,7 @@ import App from "./App.tsx";
 import { AuthProvider } from "./context/AuthContext";
 import { RepoProvider } from "./context/RepoContext";
 import { ThemeProvider } from "./components/ThemeProvider";
+import { OrgDesignPack } from "./components/OrgDesignPack";
 import { Toaster } from "@/components/ui/sonner";
 import "./index.css";
 
@@ -29,6 +30,7 @@ createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
+        <OrgDesignPack />
         <RepoProvider>
           <App />
         </RepoProvider>

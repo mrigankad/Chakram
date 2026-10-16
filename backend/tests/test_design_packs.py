@@ -239,3 +239,52 @@ async def test_a_new_app_gets_the_org_default_pack_or_the_requested_one(app_clie
 
     missing = await app_client.post("/api/ai-ide/workspace/create", json={"pack_id": "nope"})
     assert missing.status_code == 404
+
+
+# ── Chakram wears the pack ────────────────────────────────────────────────
+
+def test_theme_variables_carry_only_what_the_pack_sets():
+    meta, _ = packs.validate(acme_files())
+    theme = packs.theme_variables(acme_files(), meta)
+    assert theme["id"] == "acme" and theme["mode"] == "light"
+    assert theme["fonts"] == [ACME_META["fonts"]["sans"]["url"], ACME_META["fonts"]["display"]["url"]]
+    assert theme["light"]["font-sans"] == "'Inter', system-ui, sans-serif" and theme["light"]["radius-lg"] == "4px"
+    assert theme["light"]["action-primary-default"] == "#c8102e" and theme["dark"]["surface-page-background"] == "#121212"
+    assert "surface-raised" not in theme["dark"]  # the pack's dark block left it alone
+    # The builtin pack overrides nothing beyond its fonts and radius.
+    chronos_meta, _ = packs.validate(packs.builtin_packs()["chronos"])
+    chronos = packs.theme_variables(packs.builtin_packs()["chronos"], chronos_meta)
+    assert set(chronos["light"]) == {"font-sans", "font-display", "radius-lg"} and chronos["dark"] == {}
+
+
+def test_chakrams_own_tokens_consume_every_name_a_pack_can_set():
+    """A pack overrides the kit's semantic names; Chakram's stylesheets must read those same names
+    (directly or through its bridge aliases) or the pack would restyle apps but not Chakram."""
+    import re
+    from pathlib import Path
+
+    styles = Path(__file__).resolve().parents[2] / "frontend" / "src" / "styles"
+    chakram_css = "\n".join(p.read_text(encoding="utf-8") for p in sorted(styles.glob("*.css")))
+    chakram_css += (styles.parent / "index.css").read_text(encoding="utf-8")
+    defined = set(re.findall(r"--([a-zA-Z0-9-]+)\s*:", chakram_css))
+    consumed = set(re.findall(r"var\(--([a-zA-Z0-9-]+)", chakram_css))
+    settable = set(packs._semantic_names(packs._kit_defaults())) | {"font-sans", "font-display", "radius-lg"}
+    missing = sorted(n for n in settable if n not in defined and n not in consumed)
+    assert not missing, f"pack tokens Chakram neither defines nor reads: {missing}"
+    # Light is the default document (a pack's :root block is light), dark is the .dark class.
+    tokens = (styles / "imcc-tokens.css").read_text(encoding="utf-8")
+    assert tokens.index(":root {") < tokens.index(".dark {")
+    assert ":root.light" not in tokens
+
+
+async def test_the_org_theme_follows_the_default_pack(app_client, db):
+    org_id = await _login(app_client, db)
+    theme = (await app_client.get("/api/orgs/current/design-pack")).json()
+    assert theme["id"] == "chronos" and theme["dark"] == {} and "action-primary-default" not in theme["light"]
+    await packs.save_org_pack(db, org_id, acme_files())
+    await packs.set_org_default(db, org_id, "acme")
+    theme = (await app_client.get("/api/orgs/current/design-pack")).json()
+    assert theme["id"] == "acme" and theme["light"]["action-primary-default"] == "#c8102e"
+    assert theme["fonts"][0].startswith("https://fonts.googleapis.com/")
+    await _login(app_client, db, name="org_b")
+    assert (await app_client.get("/api/orgs/current/design-pack")).json()["id"] == "chronos"

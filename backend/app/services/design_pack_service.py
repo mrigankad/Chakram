@@ -467,5 +467,30 @@ async def load_pack(db, org_id: str, pack_id: str | None) -> tuple[str, dict[str
     return DEFAULT_PACK_ID, builtin[DEFAULT_PACK_ID], meta
 
 
+def theme_variables(files: dict[str, str], meta: dict[str, Any]) -> dict[str, Any]:
+    """The pack as custom properties for a host document (Chakram's own UI wears the org's pack).
+
+    `light` and `dark` are the declarations of pack.css by mode, plus the fonts and radius
+    pack.json implies; `fonts` are the Google Fonts stylesheets to load. Only names the
+    pack sets are returned, so the host keeps its own defaults for everything else.
+    """
+    light, dark = _split_css(files.get("pack.css", ""))
+    font_light, _ = _split_css(_font_css(meta))
+    return {
+        "id": meta["id"],
+        "name": meta.get("name", meta["id"]),
+        "mode": meta.get("mode", "light"),
+        "fonts": font_links(meta),
+        "light": {**font_light, **light},
+        "dark": dark,
+    }
+
+
+async def org_theme(db, org_id: str) -> dict[str, Any]:
+    """`theme_variables` of the organization's default pack."""
+    _pack_id, files, meta = await load_pack(db, org_id, None)
+    return theme_variables(files, meta)
+
+
 async def ensure_indexes(db) -> None:
     await db[COLLECTION].create_index([("org_id", 1), ("id", 1)], unique=True)
