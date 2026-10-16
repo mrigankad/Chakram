@@ -76,6 +76,26 @@ export type ConnectorsPublic = {
   updated_at?: string;
 };
 
+/** An installable design system for generated apps (`src/design/*`): the built-in Chronos pack or one the org uploaded. */
+export interface DesignPack {
+  id: string;
+  name: string;
+  version: string;
+  source: "builtin" | "org";
+  is_default: boolean;
+  mode: "light" | "dark";
+  fonts: { sans: string; display: string };
+  /** Hex colours for a small preview strip. */
+  swatches: { page: string; container: string; text: string; accent: string };
+}
+
+export interface DesignPackList {
+  packs: DesignPack[];
+  default_id: string;
+}
+
+export const DESIGN_PACKS_QUERY_KEY = ["design-packs"] as const;
+
 export interface Requirement {
   id: string;
   text: string;
@@ -1417,6 +1437,26 @@ export const api = {
   }) => apiClient.post<ActivityHistoryItem>("/activity/history", body).then((r) => r.data),
   clearActivityHistory: (kind?: ActivityKind) =>
     apiClient.delete<{ deleted: number }>("/activity/history", { params: kind ? { kind } : {} }).then((r) => r.data),
+
+  // ── Design packs (App Builder design systems) ──
+  listDesignPacks: () =>
+    apiClient.get<DesignPackList>("/ai-ide/design-packs").then((r) => r.data),
+  /** Uploads a pack zip (pack.json, pack.css, optional README.md and brand/logo.svg). A 422 carries the validator's report in `detail`. */
+  uploadDesignPack: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return apiClient
+      .post<{ pack: DesignPack; warnings: string[] }>("/ai-ide/design-packs", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
+      .then((r) => r.data);
+  },
+  setDefaultDesignPack: (id: string) =>
+    apiClient
+      .post<{ ok: boolean; default_id: string }>(`/ai-ide/design-packs/${encodeURIComponent(id)}/default`)
+      .then((r) => r.data),
+  deleteDesignPack: (id: string) =>
+    apiClient.delete<{ ok: boolean }>(`/ai-ide/design-packs/${encodeURIComponent(id)}`).then((r) => r.data),
 
   // ── Org connectors (reconfigurable secrets) ──
   getConnectors: () =>

@@ -38,7 +38,9 @@ import { AiIdeProvider, pendingPreviewFiles, useAiIde } from "@/context/AiIdeCon
 import { AiFileTree } from "@/components/ai-ide/AiFileTree";
 import { AiCodeEditor } from "@/components/ai-ide/AiCodeEditor";
 import { useAiGenerationWS } from "@/hooks/useAiGenerationWS";
-import { api, apiClient } from "@/lib/api";
+import { DESIGN_PACKS_QUERY_KEY, api, apiClient } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AiIdePreview } from "@/components/ai-ide/AiIdePreview";
 import { DesignPanel, type SelectedElement } from "@/components/ai-ide/DesignPanel";
 import type { StyleTarget } from "@/components/ai-ide/ElementInspector";
@@ -104,20 +106,28 @@ function IdeaScreen({
   onOpenApp,
   notice,
 }: {
-  onBuild: (idea: string) => void;
+  /** `packId` is the design pack the app is created with; undefined leaves the choice to the server. */
+  onBuild: (idea: string, packId?: string) => void;
   onOpenApp: (app: { workspace_id: string; idea: string | null; name: string | null }) => void;
   notice?: string | null;
 }) {
   const [idea, setIdea] = useState("");
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [chosenPackId, setChosenPackId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { state } = useAiIde();
   const isLoading = state.status === "creating";
+  // The design system the app starts from. When the list cannot be loaded the selector is
+  // hidden and no pack is sent: the server then uses the organization's default.
+  const packsQuery = useQuery({ queryKey: DESIGN_PACKS_QUERY_KEY, queryFn: api.listDesignPacks, retry: false });
+  const packs = packsQuery.data?.packs ?? [];
+  const selectedPackId =
+    chosenPackId && packs.some((p) => p.id === chosenPackId) ? chosenPackId : packsQuery.data?.default_id;
 
   const handleSubmit = () => {
     if (!idea.trim() || isLoading) return;
-    onBuild(idea.trim());
+    onBuild(idea.trim(), packsQuery.data ? selectedPackId : undefined);
   };
 
   const readPrdFile = async (file: File) => {
@@ -222,6 +232,22 @@ placeholder="Describe the app to build: its pages, main features and data."
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </span>
+                )}
+                {packsQuery.data && packs.length > 0 && (
+                  <Select value={selectedPackId ?? ""} onValueChange={setChosenPackId} disabled={isLoading}>
+                    <SelectTrigger className="h-8 w-auto min-w-[180px] gap-2 text-xs" aria-label="Design system">
+                      <Palette className="h-3.5 w-3.5 shrink-0 text-ink-tertiary" aria-hidden="true" />
+                      <SelectValue placeholder="Design system" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {packs.map((pack) => (
+                        <SelectItem key={pack.id} value={pack.id} className="text-xs">
+                          {pack.name}
+                          {pack.id === packsQuery.data?.default_id ? " (default)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
                 <span className="text-xs text-ink-tertiary">
                   <Kbd>{/Mac|iPhone|iPad/i.test(navigator.platform) ? "⌘" : "Ctrl"}</Kbd> + <Kbd>Enter</Kbd> to build
@@ -1772,14 +1798,16 @@ function AiIdeInner() {
     };
   }, [dispatch]);
 
-  const handleBuild = async (idea: string) => {
+  const handleBuild = async (idea: string, packId?: string) => {
     dispatch({ type: "SET_STATUS", status: "creating", message: "Creating workspace…" });
     setRestoreNotice(null);
     setRestored(false);
     setCurrentIdea(idea);
     try {
-      const res = await apiClient.post<{ workspace_id: string; file_paths: string[] }>(
-        "/ai-ide/workspace/create"
+      // Without a pack the server installs the organization's default design pack.
+      const res = await apiClient.post<{ workspace_id: string; file_paths: string[]; pack_id?: string }>(
+        "/ai-ide/workspace/create",
+        packId ? { pack_id: packId } : undefined,
       );
       const { workspace_id, file_paths } = res.data;
       const filesRes = await apiClient.get<Record<string, string>>(`/ai-ide/workspace/${workspace_id}/files`);

@@ -183,6 +183,13 @@ PID only. Do not touch Docker containers other than `aidlc-mongo`.
   WayamEye and Chronos) described by `backend/app/templates/marks_manifest.json`. Prompts get
   only the icons relevant to the app/page (`marks_service.relevant_marks`). Used icons are
   copied into an app on download and push.
+- **Design packs** (`docs/chakram/DESIGN_PACKS.md`): a client's visual system as a zip
+  (`pack.json`, `pack.css`, optional `README.md`, `brand/logo.svg`), validated and stored per
+  org (`design_packs`), chosen when an app is created and installed under `src/design/`.
+  `index.css` loads `chronos/tokens.css` → `design/pack.css` → `design.css`; the kit reads
+  fonts, radius and the logo from variables/props and the kit upgrade never touches
+  `src/design/`. `backend/app/services/design_pack_service.py`; the builtin pack is
+  `backend/app/templates/design_packs/chronos/`.
 - **Storage**: every App Builder file is mirrored to MongoDB (`ai_ide_files`, one doc per
   file) and restored from there when the disk copy is gone (Azure container restarts).
   `ai_ide_workspaces` holds name/idea/status for the "Your apps" list.

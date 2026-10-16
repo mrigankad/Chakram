@@ -408,11 +408,22 @@ async def ensure_indexes(db) -> None:
     await db[FILES].create_index([("workspace_id", 1)])
 
 
-async def create_workspace(org_id: str, db=None) -> str:
+async def create_workspace(org_id: str, db=None, pack_id: str | None = None) -> str:
+    """A new app from the template with a design pack installed (the org's default when None)."""
+    from app.services import design_pack_service
+
     _ensure_workspace_root()
     workspace_id = str(uuid.uuid4())
     template = await _get_template_cached()
-    _workspaces[workspace_id] = dict(template)
+    if db is not None:
+        pack_id, pack_files, pack_meta = await design_pack_service.load_pack(db, org_id, pack_id)
+    else:
+        builtin = design_pack_service.builtin_packs()
+        pack_id = pack_id if pack_id in builtin else design_pack_service.DEFAULT_PACK_ID
+        pack_files = builtin.get(pack_id, {})
+        pack_meta, _ = design_pack_service.validate(pack_files) if pack_files else ({"id": pack_id}, [])
+    files = design_pack_service.install(template, pack_files, pack_meta) if pack_files else dict(template)
+    _workspaces[workspace_id] = files
     root_dir = str(_ai_ide_root / workspace_id)
     _workspace_meta[workspace_id] = {
         "workspace_id": workspace_id,
@@ -423,6 +434,7 @@ async def create_workspace(org_id: str, db=None) -> str:
         "repo_name": None,
         "default_branch": "main",
         "github_token": None,
+        "pack_id": pack_id,
     }
     await asyncio.to_thread(_write_workspace_files_to_disk, workspace_id)
     _write_meta(workspace_id)

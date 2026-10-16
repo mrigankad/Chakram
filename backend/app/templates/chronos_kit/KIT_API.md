@@ -1,7 +1,7 @@
 # Chronos kit: API for page authors
 
 Target: Vite + React 18 + TypeScript + Tailwind 3.4 + react-router-dom 6 + recharts 2.15 + lucide-react.
-Kit version: `src/chronos/VERSION` (8).
+Kit version: `src/chronos/VERSION` (9).
 
 Setup the host app must do once: `src/index.css` imports `./chronos/tokens.css` (then `./design.css`) and `src/main.tsx` wraps the app in `BrowserRouter`. `tailwind.config.js` needs `content: ["./src/**/*.{ts,tsx}"]` and `theme: { extend: <contents of src/chronos/theme.json> }`.
 
@@ -20,7 +20,7 @@ Every component accepts className; your classes override the component's default
 
 ## Layout and shell
 
-- `AppShell({ appName: string; logoMark?: string; nav: { to: string; label: string; icon?: string }[]; children })` - sidebar + top bar. `icon` is a lucide name (`"LayoutDashboard"`); unknown names show `Circle`. Items without a `to` are skipped. Wrap the routes in it, inside `BrowserRouter`.
+- `AppShell({ appName: string; logoMark?: string; logoSrc?: string; nav: { to: string; label: string; icon?: string }[]; children })` - sidebar + top bar. `icon` is a lucide name (`"LayoutDashboard"`); unknown names show `Circle`. Items without a `to` are skipped. Wrap the routes in it, inside `BrowserRouter`.
 - `PageHeader({ title; description?; info?; mark?; actions?; children? })` - title row, optional description, right-side actions, optional second row (chips).
 - `PageBody({ children })` - scrolling body container under PageHeader.
 - `KpiGrid({ children?; className? })` - row of KpiTiles; columns fit the width (min 13.5rem each). Use for any row of KpiTiles.

@@ -5,7 +5,7 @@ import json
 import re
 import zipfile
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -17,6 +17,7 @@ from app.services import ai_ide_generation
 from app.services import ai_ide_service
 from app.services import ai_service
 from app.services import connector_settings_service as connectors
+from app.services import design_pack_service
 from app.services import marks_service
 from app.services import organization_service
 from app.services import vercel_service
@@ -135,11 +136,66 @@ async def delete_workspace(workspace_id: str, org: OrganizationOut = Depends(get
     return {"ok": True}
 
 
+class CreateWorkspaceRequest(BaseModel):
+    pack_id: str | None = None
+
+
 @router.post("/workspace/create")
-async def create_workspace(org: OrganizationOut = Depends(get_current_org), db=Depends(get_db)):
-    workspace_id = await ai_ide_service.create_workspace(org.id, db=db)
+async def create_workspace(
+    payload: CreateWorkspaceRequest | None = None,
+    org: OrganizationOut = Depends(get_current_org),
+    db=Depends(get_db),
+):
+    pack_id = payload.pack_id if payload else None
+    try:
+        workspace_id = await ai_ide_service.create_workspace(org.id, db=db, pack_id=pack_id)
+    except design_pack_service.PackError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     files = ai_ide_service.list_file_paths(workspace_id)
-    return {"workspace_id": workspace_id, "file_paths": files}
+    meta = ai_ide_service.require_org_workspace(org.id, workspace_id)
+    return {"workspace_id": workspace_id, "file_paths": files, "pack_id": meta.get("pack_id")}
+
+
+# ── Design packs ─────────────────────────────────────────────────────────────
+
+@router.get("/design-packs")
+async def list_design_packs(org: OrganizationOut = Depends(get_current_org), db=Depends(get_db)):
+    return await design_pack_service.list_packs(db, org.id)
+
+
+@router.post("/design-packs")
+async def upload_design_pack(
+    file: UploadFile = File(...),
+    org: OrganizationOut = Depends(get_current_org),
+    db=Depends(get_db),
+):
+    data = await file.read(design_pack_service.MAX_ZIP_BYTES + 1)
+    if len(data) > design_pack_service.MAX_ZIP_BYTES:
+        raise HTTPException(status_code=413, detail=f"The zip is larger than {design_pack_service.MAX_ZIP_BYTES // 1000} KB.")
+    try:
+        files = design_pack_service.files_from_zip(data)
+        pack, warnings = await design_pack_service.save_org_pack(db, org.id, files)
+    except design_pack_service.PackError as exc:
+        raise HTTPException(status_code=422, detail=f"Design pack rejected: {exc}") from exc
+    return {"pack": pack, "warnings": warnings}
+
+
+@router.post("/design-packs/{pack_id}/default")
+async def set_default_design_pack(pack_id: str, org: OrganizationOut = Depends(get_current_org), db=Depends(get_db)):
+    try:
+        default_id = await design_pack_service.set_org_default(db, org.id, pack_id)
+    except design_pack_service.PackError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True, "default_id": default_id}
+
+
+@router.delete("/design-packs/{pack_id}")
+async def delete_design_pack(pack_id: str, org: OrganizationOut = Depends(get_current_org), db=Depends(get_db)):
+    if pack_id in design_pack_service.builtin_packs():
+        raise HTTPException(status_code=404, detail="Builtin design packs cannot be deleted.")
+    if not await design_pack_service.delete_org_pack(db, org.id, pack_id):
+        raise HTTPException(status_code=404, detail=f"No design pack '{pack_id}' for this organization.")
+    return {"ok": True}
 
 
 @router.get("/workspace/{workspace_id}/files", dependencies=[Depends(_attach_workspace)])

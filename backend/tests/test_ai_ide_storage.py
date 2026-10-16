@@ -66,7 +66,8 @@ async def test_apps_are_listed_per_org_with_info_and_can_be_deleted(isolated, db
     apps = await svc.list_apps(db, "org-a")
     assert [a["workspace_id"] for a in apps] == [mine]
     assert apps[0]["name"] == "Ledgerly" and apps[0]["status"] == "done"
-    assert apps[0]["file_count"] == 2 and apps[0]["updated_at"]
+    # the template's files plus the default design pack (src/design/*)
+    assert apps[0]["file_count"] == len(svc.get_workspace_files(mine)) and apps[0]["updated_at"]
 
     assert await svc.delete_app(db, "org-a", other) is False  # not this org's app
     assert await svc.delete_app(db, "org-a", mine) is True
@@ -91,7 +92,7 @@ def test_outdated_kit_files_are_replaced_only_for_older_kit_apps(monkeypatch):
 async def test_an_app_from_before_storage_is_backfilled_on_open(isolated, db, tmp_path):
     ws = await _create(db)
     await db[svc.FILES].delete_many({"workspace_id": ws})  # as if built before files were stored
-    assert await svc.ensure_stored(db, ws) == 2
+    assert await svc.ensure_stored(db, ws) == len(svc.get_workspace_files(ws))
     await svc.flush_pending()
-    assert await db[svc.FILES].count_documents({"workspace_id": ws}) == 2
+    assert await db[svc.FILES].count_documents({"workspace_id": ws}) == len(svc.get_workspace_files(ws))
     assert await svc.ensure_stored(db, ws) == 0

@@ -414,6 +414,40 @@
     return lines.join("\n");
   }
 
+  function svgDataUrl(source) {
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(String(source == null ? "" : source));
+  }
+
+  // ── Stylesheets ──────────────────────────────────────────────────────────
+  var TOKENS_CSS = "src/chronos/tokens.css";
+  var PACK_CSS = "src/design/pack.css";
+  var DESIGN_CSS = "src/design.css";
+
+  /**
+   * The order the workspace's stylesheets are concatenated in: the kit's tokens, then
+   * the design pack's overrides, then every other stylesheet as given, and the Design
+   * tab's overrides (src/design.css) last so they win. Mirrored by
+   * src/lib/preview-css-order.ts; keep the two in step.
+   */
+  function orderStylesheets(paths) {
+    function rank(p) {
+      if (p === TOKENS_CSS) return 0;
+      if (p === PACK_CSS) return 1;
+      if (p === DESIGN_CSS) return 3;
+      return 2;
+    }
+    var indexed = [];
+    for (var i = 0; i < paths.length; i += 1) {
+      if (paths[i].endsWith(".css")) indexed.push({ path: paths[i], index: i });
+    }
+    indexed.sort(function (a, b) {
+      return rank(a.path) - rank(b.path) || a.index - b.index;
+    });
+    var out = [];
+    for (var j = 0; j < indexed.length; j += 1) out.push(indexed[j].path);
+    return out;
+  }
+
   // ── Build ────────────────────────────────────────────────────────────────
   function build(tools, files, pending) {
     var pendingSet = Object.create(null);
@@ -448,7 +482,9 @@
       if (!path.endsWith(".ts") && !path.endsWith(".tsx") && !path.endsWith(".js") && !path.endsWith(".jsx")) {
         if (path.endsWith(".json")) return emit(path, "export default " + source + ";");
         if (path.endsWith(".css")) return emit(path, "export {};");
-        var e = new Error("The preview cannot import " + path + " (only TS, TSX, JS, JSX, JSON and CSS files)");
+        // An SVG (a design pack's logo) imports as a data URL, as Vite would serve it.
+        if (path.endsWith(".svg")) return emit(path, "export default " + JSON.stringify(svgDataUrl(source)) + ";");
+        var e = new Error("The preview cannot import " + path + " (only TS, TSX, JS, JSX, JSON, CSS and SVG files)");
         e.path = path;
         e.stage = "compile";
         throw e;
@@ -463,7 +499,8 @@
         var spec = imp.n;
         var replacement;
         if (isLocal(spec)) {
-          var target = localTarget(path, spec);
+          // Vite's `?url` suffix (e.g. `logo.svg?url`) asks for the asset's URL, which is what a data URL is.
+          var target = localTarget(path, spec.replace(/\?url$/, ""));
           var resolved = lookup(files, target);
           if (!resolved) {
             // Planned files are known before they exist; stand in for them until they land.
@@ -576,17 +613,13 @@
   function applyStyles(files) {
     var designChanged = applyDesign(files);
     var imports = [];
-    var css = Object.keys(files)
-      .filter(function (p) {
-        return p.endsWith(".css");
-      })
-      // The design editor's overrides (src/design.css) must come after the kit's tokens.
-      .sort(function (a, b) {
-        return (a === "src/design.css" ? 1 : 0) - (b === "src/design.css" ? 1 : 0);
-      })
+    // Tokens, then the design pack, then the rest, then the Design tab's overrides.
+    var css = orderStylesheets(Object.keys(files))
       .map(function (p) {
         return String(files[p])
           .replace(/@tailwind\s+[a-z]+\s*;/g, "")
+          // Only `@import url(...)` is lifted out (Google Fonts become a <link>); an
+          // `@font-face` whose src is a data: URL or a fonts.gstatic.com file stays in the sheet.
           .replace(/@import\s+url\((['"]?)([^'")]+)\1\)\s*;?/g, function (_m, _q, url) {
             imports.push(url);
             return "";

@@ -48,3 +48,19 @@ Working tree on `claude/dazzling-mendel-wckwjs`, on top of the audit commit. Che
 - `KIT_API.md` is kept as the human reference; prompts use the sheets.
 
 **Next task:** T-020 (extract the chronos design pack; `src/design/` in apps), then T-021/T-022.
+
+## 2026-10-16 — Phase D1 built: design packs (T-020..T-022 done)
+
+Checks: backend 648 passed / 1 skipped, frontend tsc clean, 525 vitest passed, production build passed.
+
+- **Pack format** (`docs/chakram/DESIGN_PACKS.md`): `pack.json`, `pack.css`, optional `README.md` and `brand/logo.svg`, zipped. The builtin `chronos` pack is the extracted current look (`backend/app/templates/design_packs/chronos/`).
+- **Kit 9**: fonts, card radius and sidebar width are custom properties with Chronos defaults; `AppShell` takes `logoSrc`. Existing apps upgrade to kit 9 unchanged in appearance.
+- **Install**: a new app gets `src/design/*`; `index.css` loads tokens → `design/pack.css` → `design.css`; `index.html` gets the pack's font links and dark mode; `App.tsx` passes the logo. The kit upgrade never touches `src/design/`.
+- **Validation** on upload: metadata, SVG-only logo without script, light-mode contrast (reject < 3:1, warn < 4.5:1 on five pairs), which tokens remain at Chronos defaults, missing dark block, stray files. Rejections come back as one readable message.
+- **Org storage**: `design_packs` collection (org + id unique), default on the org document; `GET/POST/DELETE /api/ai-ide/design-packs`, `POST …/{id}/default`; Settings → Design System section; App Studio idea screen has a Design system selector; `POST /ai-ide/workspace/create` takes `pack_id`.
+- **Planner** reads the pack's README as design notes.
+- **Preview**: `.svg` imports become data URLs; stylesheet order matches the real build.
+
+**Not done / limits**: fonts are Google links or `@font-face` data URLs in `pack.css` (no binary font upload, by design: app files are text). Chakram's own frontend does not yet load the org pack (T-030, Phase D2). No live build was run here.
+
+**Next task:** T-030 (Chakram frontend adopts kit token names and loads the org pack) or T-040 (app spec + composer), per the plan's order: T-040 is the larger token saving; T-030 is what makes "install Mahindra" re-skin Chakram itself.

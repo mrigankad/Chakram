@@ -1,0 +1,14 @@
+{
+  "id": "chronos",
+  "name": "Chronos",
+  "version": "1.0.0",
+  "kit_compat": 9,
+  "mode": "light",
+  "fonts": {
+    "sans": { "family": "Geist", "stack": ["Geist", "ui-sans-serif", "system-ui", "sans-serif"], "source": "google", "url": "https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" },
+    "display": { "family": "Michroma", "stack": ["Michroma", "Geist", "sans-serif"], "source": "google", "url": "https://fonts.googleapis.com/css2?family=Michroma&display=swap" }
+  },
+  "radius": { "lg": "8px" },
+  "brand": { "logo": null },
+  "swatches": { "page": "#f3f4f6", "container": "#ffffff", "text": "#0b0b0c", "accent": "#0b0b0c" }
+}

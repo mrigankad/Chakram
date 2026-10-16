@@ -68,6 +68,7 @@ function puckClass(active: boolean) {
 export function AppShell({
   appName,
   logoMark,
+  logoSrc,
   nav,
   children,
   className,
@@ -75,6 +76,8 @@ export function AppShell({
   appName: string;
   /** Mark id for the logo tile (served from /marks/<id>.png). */
   logoMark?: string;
+  /** Image URL for the logo tile (a design pack's brand/logo.svg); wins over logoMark. */
+  logoSrc?: string;
   nav: AppNavItem[];
   children: ReactNode;
   className?: string;
@@ -134,7 +137,7 @@ export function AppShell({
         className={[
           "fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col border-r border-muted bg-container",
           "transition-[width,transform] duration-200 ease-out lg:relative lg:z-30 lg:translate-x-0",
-          showLabels ? "w-[252px]" : "w-[68px]",
+          showLabels ? "w-[var(--shell-sidebar-width,252px)]" : "w-[68px]",
           drawerOpen
             ? "translate-x-0"
             : "-translate-x-full pointer-events-none lg:pointer-events-auto lg:translate-x-0",
@@ -148,7 +151,13 @@ export function AppShell({
         >
           <span className="flex min-w-0 items-center gap-2.5">
             <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-action-primary font-display text-body-sm text-on-color">
-              {logoMark ? <Mark id={logoMark} size={32} className="size-8 rounded-[10px]" /> : label.charAt(0).toUpperCase()}
+              {logoSrc ? (
+                <img src={logoSrc} alt="" className="size-8 rounded-[10px] object-contain" />
+              ) : logoMark ? (
+                <Mark id={logoMark} size={32} className="size-8 rounded-[10px]" />
+              ) : (
+                label.charAt(0).toUpperCase()
+              )}
             </span>
             {showLabels ? (
               <span className="truncate font-display text-body-md text-primary">{label}</span>

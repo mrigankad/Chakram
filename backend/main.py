@@ -72,6 +72,11 @@ async def _ensure_indexes_and_seed() -> None:
     except Exception as exc:
         print(f"[DB] baseline index creation failed (non-fatal): {exc}")
     try:
+        from app.services import design_pack_service
+        await design_pack_service.ensure_indexes(get_db())
+    except Exception as exc:
+        print(f"[DB] design pack index creation failed (non-fatal): {exc}")
+    try:
         await organization_service.ensure_indexes(get_db())
     except Exception as exc:
         print(f"[DB] organization index creation failed (non-fatal): {exc}")

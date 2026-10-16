@@ -167,6 +167,12 @@
      TIER 2 - SEMANTIC (light is default on :root)
      ----------------------------------------------------------- */
 
+  /* type and shape: a design pack overrides these (src/design/pack.css) */
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Michroma', 'Geist', sans-serif;
+  --radius-lg: 8px;
+  --shell-sidebar-width: 252px;
+
   /* surface */
   --surface-page-background: var(--ref-gray-100);
   --surface-container: var(--ref-white);
@@ -353,7 +359,7 @@ html {
 body {
   background: var(--surface-page-background);
   color: var(--text-secondary);
-  font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans, 'Geist', ui-sans-serif, system-ui, sans-serif);
   font-size: 14px;
   line-height: 20px;
   letter-spacing: -0.01em;

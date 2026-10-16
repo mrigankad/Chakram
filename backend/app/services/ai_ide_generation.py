@@ -289,9 +289,15 @@ async def _generate(run: GenerationRun) -> None:
     emit = run.emit
 
     emit({"type": "STATUS", "message": "Planning your app…"})
+    design_notes = None
+    try:
+        design_notes = ai_ide_service.read_file(workspace_id, "src/design/README.md")
+    except Exception:  # noqa: BLE001 - an app without a pack has no notes
+        design_notes = None
     try:
         raw_plan = await asyncio.wait_for(
-            plan_files(run.idea, log_extra=run.log_extra, usage_sink=run.add_usage), timeout=PLANNER_TIMEOUT
+            plan_files(run.idea, design_notes=design_notes, log_extra=run.log_extra, usage_sink=run.add_usage),
+            timeout=PLANNER_TIMEOUT,
         )
     except asyncio.TimeoutError:
         emit({"type": "ERROR", "message": f"Planner timed out after {int(PLANNER_TIMEOUT)}s. Try a shorter idea."})

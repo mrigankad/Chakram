@@ -32,12 +32,18 @@ const DESIGN_CSS_HEADER = "/* Theme overrides from the App Builder's Design tab.
 const ACCENT_SUGGESTIONS = ["#ff7b1c", "#2563eb", "#0891b2", "#15803d", "#6d28d9", "#db2777", "#b91c1c", "#111827"];
 const STATUS_DEFAULTS = { success: "#2f9e5b", info: "#2c96db", warning: "#ff7b1c", error: "#e5484d" };
 
-/** index.css must load design.css right after the kit's tokens. */
+/**
+ * index.css must load design.css after the kit's tokens and after a design pack's
+ * overrides (./design/pack.css), never between the two: the Design tab's edits are
+ * a delta over whichever pack the app was created with.
+ */
 export function withDesignImport(css: string): string {
   if (/@import\s+['"]\.\/design\.css['"]/.test(css)) return css;
+  const pack = css.match(/@import\s+['"]\.\/design\/pack\.css['"]\s*;?[^\n]*\n?/);
   const tokens = css.match(/@import\s+['"]\.\/chronos\/tokens\.css['"]\s*;?[^\n]*\n?/);
-  if (tokens && tokens.index !== undefined) {
-    const at = tokens.index + tokens[0].length;
+  const after = pack ?? tokens;
+  if (after && after.index !== undefined) {
+    const at = after.index + after[0].length;
     return css.slice(0, at) + "@import './design.css';\n" + css.slice(at);
   }
   return "@import './design.css';\n" + css;

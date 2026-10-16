@@ -1,17 +1,19 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { ConnectorIcon, type ConnectorId } from "@/components/ConnectorIcon";
+import { ErrorText } from "@/components/ErrorText";
 import { StatusBadge } from "@/components/imcc/StatusBadge";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Palette, Upload } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
 import { PageHeader } from "@/components/PageHeader";
 import { Panel } from "@/components/imcc/Panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useQueryClient } from "@tanstack/react-query";
+import { useAskDialog } from "@/components/ui/ask-dialog";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ORG_CONNECTORS_QUERY_KEY } from "@/hooks/use-org-connectors";
-import { api, type ConnectorsPublic } from "@/lib/api";
+import { DESIGN_PACKS_QUERY_KEY, api, type ConnectorsPublic, type DesignPack } from "@/lib/api";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api-error";
 
@@ -120,6 +122,230 @@ function SecretInput({
         </button>
       </div>
     </div>
+  );
+}
+
+/** The four colours a pack is previewed by (page, container, text, accent). Colours are data, so they are inline. */
+function PackSwatches({ pack }: { pack: DesignPack }) {
+  const entries: Array<[string, string]> = [
+    ["Page", pack.swatches.page],
+    ["Container", pack.swatches.container],
+    ["Text", pack.swatches.text],
+    ["Accent", pack.swatches.accent],
+  ];
+  return (
+    <span className="flex shrink-0 overflow-hidden rounded border border-stroke-muted" aria-hidden="true">
+      {entries.map(([label, colour]) => (
+        <span key={label} title={`${label} ${colour}`} className="h-6 w-5" style={{ backgroundColor: colour }} />
+      ))}
+    </span>
+  );
+}
+
+function PackRow({
+  pack,
+  busy,
+  onMakeDefault,
+  onDelete,
+}: {
+  pack: DesignPack;
+  /** Which action is running for this pack, if any. */
+  busy: "default" | "delete" | null;
+  onMakeDefault: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <li className="flex flex-wrap items-center gap-3 px-4 py-3">
+      <PackSwatches pack={pack} />
+      <div className="min-w-0 flex-1">
+        <p className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="truncate text-sm font-medium text-ink">{pack.name}</span>
+          <span className="font-mono text-[11px] text-ink-quaternary">v{pack.version}</span>
+          {pack.is_default && <StatusBadge tone="success">Default</StatusBadge>}
+          <StatusBadge tone="neutral">{pack.source === "builtin" ? "Built in" : "Uploaded"}</StatusBadge>
+        </p>
+        <p className="truncate text-xs text-ink-tertiary">
+          {pack.fonts.sans}
+          {pack.fonts.display && pack.fonts.display !== pack.fonts.sans ? ` · ${pack.fonts.display}` : ""}
+          {` · ${pack.mode === "dark" ? "Dark" : "Light"} by default`}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {!pack.is_default && (
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" disabled={busy !== null} onClick={onMakeDefault}>
+            {busy === "default" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Make default
+          </Button>
+        )}
+        {pack.source === "org" && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs text-destructive hover:text-destructive"
+            disabled={busy !== null}
+            onClick={onDelete}
+            aria-label={`Delete design pack ${pack.name}`}
+          >
+            {busy === "delete" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Delete"}
+          </Button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/**
+ * Settings → Design System: the design packs new App Builder apps can be created
+ * with. The built-in Chronos pack is always there; an organization can upload its
+ * own as a zip and make it the default for new apps.
+ */
+function DesignSystemSection() {
+  const queryClient = useQueryClient();
+  const { dialog, confirm } = useAskDialog();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const fileId = useId();
+  const [file, setFile] = useState<File | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [busyPack, setBusyPack] = useState<{ id: string; action: "default" | "delete" } | null>(null);
+
+  const packsQuery = useQuery({ queryKey: DESIGN_PACKS_QUERY_KEY, queryFn: api.listDesignPacks });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: DESIGN_PACKS_QUERY_KEY });
+
+  const uploadMutation = useMutation({
+    mutationFn: (pack: File) => api.uploadDesignPack(pack),
+    onSuccess: (res) => {
+      setWarnings(res.warnings ?? []);
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      toast.success(`Design pack "${res.pack.name}" uploaded`, {
+        description: res.pack.is_default ? "It is the default for new apps." : "Make it the default to use it for new apps.",
+      });
+      void invalidate();
+    },
+  });
+
+  const defaultMutation = useMutation({
+    mutationFn: (id: string) => api.setDefaultDesignPack(id),
+    onSuccess: () => void invalidate(),
+    onError: (e) => toast.error("The default design pack was not changed", { description: apiErrorMessage(e) }),
+    onSettled: () => setBusyPack(null),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteDesignPack(id),
+    onSuccess: () => void invalidate(),
+    onError: (e) => toast.error("The design pack was not deleted", { description: apiErrorMessage(e) }),
+    onSettled: () => setBusyPack(null),
+  });
+
+  const makeDefault = (pack: DesignPack) => {
+    setBusyPack({ id: pack.id, action: "default" });
+    defaultMutation.mutate(pack.id);
+  };
+
+  const remove = async (pack: DesignPack) => {
+    const ok = await confirm({
+      title: `Delete "${pack.name}"?`,
+      description: "Apps already created with this pack keep their copy of it. New apps can no longer be created with it.",
+      confirmLabel: "Delete pack",
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusyPack({ id: pack.id, action: "delete" });
+    deleteMutation.mutate(pack.id);
+  };
+
+  const packs = packsQuery.data?.packs ?? [];
+
+  return (
+    <Panel padded={false}>
+      <header className="flex h-11 items-center justify-between gap-3 border-b border-stroke-muted px-4">
+        <span className="flex min-w-0 items-center gap-2.5">
+          <Palette className="h-4 w-4 text-ink" aria-hidden="true" />
+          <h2 className="truncate text-sm font-medium text-ink">Design System</h2>
+        </span>
+        {packsQuery.data && (
+          <span className="truncate text-[11px] text-ink-quaternary">
+            New apps use {packs.find((p) => p.id === packsQuery.data.default_id)?.name ?? packsQuery.data.default_id}
+          </span>
+        )}
+      </header>
+
+      {packsQuery.isLoading ? (
+        <div className="p-4">
+          <EmptyState kind="loading">Loading design packs…</EmptyState>
+        </div>
+      ) : packsQuery.isError ? (
+        <div className="p-4">
+          <EmptyState kind="error">
+            <ErrorText error={packsQuery.error} fallback="The design packs could not be loaded." />
+          </EmptyState>
+        </div>
+      ) : (
+        <ul className="divide-y divide-stroke-muted">
+          {packs.map((pack) => (
+            <PackRow
+              key={pack.id}
+              pack={pack}
+              busy={busyPack?.id === pack.id ? busyPack.action : null}
+              onMakeDefault={() => makeDefault(pack)}
+              onDelete={() => void remove(pack)}
+            />
+          ))}
+        </ul>
+      )}
+
+      <div className="space-y-3 border-t border-stroke-muted p-4">
+        <div className="space-y-1.5">
+          <Label htmlFor={fileId} className={fieldLabel}>Upload a design pack</Label>
+          <p className="text-xs text-ink-tertiary">
+            A .zip (up to 1 MB) with pack.json and pack.css at its root or in one folder, plus an optional README.md and brand/logo.svg. The pack is checked before it is saved; new apps get its files under src/design/.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              ref={fileInputRef}
+              id={fileId}
+              type="file"
+              accept=".zip,application/zip"
+              className="h-9 max-w-xs cursor-pointer text-xs file:mr-3 file:text-xs file:font-medium file:text-ink"
+              disabled={uploadMutation.isPending}
+              onChange={(e) => {
+                setFile(e.target.files?.[0] ?? null);
+                setWarnings([]);
+                uploadMutation.reset();
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 gap-1.5"
+              disabled={!file || uploadMutation.isPending}
+              onClick={() => file && uploadMutation.mutate(file)}
+            >
+              {uploadMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              Upload pack
+            </Button>
+          </div>
+        </div>
+        {uploadMutation.isError && (
+          <p role="alert" className="whitespace-pre-line rounded-lg border border-stroke-muted bg-raised px-3 py-2 text-xs text-destructive">
+            <ErrorText error={uploadMutation.error} fallback="The design pack could not be uploaded." />
+          </p>
+        )}
+        {warnings.length > 0 && (
+          <div className="rounded-lg border border-stroke-muted bg-raised px-3 py-2 text-xs text-ink-secondary">
+            <p className="font-medium text-ink">Uploaded with warnings</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      {dialog}
+    </Panel>
   );
 }
 
@@ -423,6 +649,8 @@ export default function ConnectorsSettings() {
       </div>
 
       <div className="flex justify-end">{saveButton}</div>
+
+      <DesignSystemSection />
     </PageShell>
   );
 }

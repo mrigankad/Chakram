@@ -1,0 +1,5 @@
+/* Chronos design pack.
+   The kit's src/chronos/tokens.css already holds the Chronos values, so this
+   pack overrides nothing. A client pack sets the same custom properties here
+   (light on :root, dark on [data-theme="dark"]) and they win over tokens.css
+   because index.css loads this file after it. */

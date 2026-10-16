@@ -65,7 +65,7 @@ RULES:
 
 _KIT_PLANNER_USER = """\
 User idea: {idea}
-
+{design_notes}
 3D icons:
 {marks}
 """
@@ -76,7 +76,7 @@ Your previous plan was rejected: {reason}
 Return the corrected plan as JSON only, following every rule.
 
 User idea: {idea}
-
+{design_notes}
 3D icons:
 {marks}
 """
@@ -137,6 +137,7 @@ def _strip_nav_files(plan: dict) -> dict:
 async def plan_files(
     idea: str,
     *,
+    design_notes: str | None = None,
     log_extra: dict | None = None,
     usage_sink: Callable[[int, int], None] | None = None,
 ) -> dict:
@@ -158,11 +159,13 @@ async def plan_files(
 
     marks = kit.marks_catalog(idea, 60) or "(none available)"
     known = _known_marks()
-    user = _KIT_PLANNER_USER.format(idea=idea, marks=marks)
+    notes = (design_notes or "").strip()[:1500]
+    notes_block = f"\nDesign system notes (the client's look and vocabulary; follow them in names and labels):\n{notes}\n" if notes else ""
+    user = _KIT_PLANNER_USER.format(idea=idea, marks=marks, design_notes=notes_block)
     last_error: str | None = None
     for attempt in range(2):
         if attempt:
-            user = _REPAIR_USER.format(reason=last_error, idea=idea, marks=marks)
+            user = _REPAIR_USER.format(reason=last_error, idea=idea, marks=marks, design_notes=notes_block)
         raw = await _call_openai(
             user, json_mode=True, task_name=_TASK_NAME, system=_KIT_PLANNER_SYSTEM,
             log_extra=log_extra, usage_sink=usage_sink,

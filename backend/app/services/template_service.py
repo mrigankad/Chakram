@@ -277,6 +277,7 @@ export default function App() {
 
 _KIT_INDEX_CSS = """\
 @import './chronos/tokens.css';
+@import './design/pack.css';
 @import './design.css';
 
 @tailwind base;

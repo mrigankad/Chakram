@@ -210,13 +210,14 @@
       "acceptance": [
         "OPS 02"
       ],
-      "status": "todo",
+      "status": "done",
       "files": [
         "backend/app/templates/design_packs/chronos/*",
         "backend/app/templates/chronos_kit/src/chronos/tokens.css",
         "backend/app/templates/chronos_kit/src/chronos/app-shell.tsx",
         "backend/app/engines/kit.py"
-      ]
+      ],
+      "evidence": "Kit 9 reads --font-sans/--font-display/--radius-lg/--shell-sidebar-width and AppShell logoSrc; chronos extracted to templates/design_packs/chronos; apps get src/design/* via design_pack_service.install; preview orders tokens \u2192 pack.css \u2192 design.css and imports .svg"
     },
     {
       "id": "T-021",
@@ -228,12 +229,13 @@
       "acceptance": [
         "OPS 02"
       ],
-      "status": "todo",
+      "status": "done",
       "files": [
         "backend/app/services/design_pack_service.py",
         "backend/app/routes/design_packs.py",
         "frontend/src/pages/ConnectorsSettings.tsx"
-      ]
+      ],
+      "evidence": "design_pack_service.validate (metadata, logo, contrast, coverage warnings); zip upload, list, default, delete routes under /ai-ide/design-packs; Settings \u2192 Design System UI; org default on the organizations doc"
     },
     {
       "id": "T-022",
@@ -245,12 +247,13 @@
       "acceptance": [
         "OPS 02"
       ],
-      "status": "todo",
+      "status": "done",
       "files": [
         "frontend/src/components/ai-ide/ThemeEditor.tsx",
         "frontend/src/lib/theme-engine.ts",
         "backend/tests/test_design_packs.py"
-      ]
+      ],
+      "evidence": "ThemeEditor keeps design.css after pack.css; planner receives src/design/README.md; tests/test_design_packs.py builds an 'acme' pack, installs it, and proves kit upgrade leaves src/design intact"
     },
     {
       "id": "T-030",
