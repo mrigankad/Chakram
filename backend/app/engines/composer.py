@@ -23,14 +23,7 @@ from app.engines.spec import AppSpec, Block, EntitySpec, FieldSpec, Metric, Page
 
 # ── naming ──────────────────────────────────────────────────────────────────
 
-def collection_name(entity: str) -> str:
-    """'Appointment' -> 'appointments', 'Category' -> 'categories', 'Status' -> 'statuses'."""
-    name = entity[0].lower() + entity[1:]
-    if re.search(r"[^aeiou]y$", name):
-        return name[:-1] + "ies"
-    if name.endswith(("s", "x", "z", "ch", "sh")):
-        return name + "es"
-    return name + "s"
+from app.engines.naming import collection_name  # noqa: E402
 
 
 def _ts_type(field: FieldSpec, entity: str, fname: str) -> str:
@@ -352,20 +345,20 @@ def seed_ts(spec: AppSpec, rows: dict[str, list[dict[str, Any]]]) -> str:
 
 class _Imports:
     def __init__(self) -> None:
-        self.kit: set[str] = {"PageBody", "PageHeader", "Mark"}
+        self.kit: set[str] = {"PageBody", "PageHeader", "Mark", "EmptyState"}
         self.kit_types: set[str] = set()
-        self.seed: set[str] = set()
+        self.seed: set[str] = set()  # collections read through useAppData()
         self.types: set[str] = set()
         self.queries: set[str] = set()
         self.components: set[str] = set()
-        self.module_consts: list[str] = []
+        self.module_consts: list[str] = []     # tone maps: no data needed
+        self.component_consts: list[str] = []  # column definitions: reference the collections
 
     def render(self) -> str:
         lines = [f"import {{ {', '.join(sorted(self.kit))} }} from '../chronos';"]
         if self.kit_types:
             lines.append(f"import type {{ {', '.join(sorted(self.kit_types))} }} from '../chronos';")
-        if self.seed:
-            lines.append(f"import {{ {', '.join(sorted(self.seed))} }} from '../data/seed';")
+        lines.append("import { useAppData } from '../data/store';")
         if self.types:
             lines.append(f"import type {{ {', '.join(sorted(self.types))} }} from '../data/types';")
         if self.queries:
@@ -476,7 +469,7 @@ def _render_block(block: Block, spec: AppSpec, imports: _Imports, indent: int = 
         imports.kit.update({"Panel", "DataTable"})
         imports.kit_types.add("Column")
         const_name = f"{rows}Columns"
-        if not any(c.startswith(f"const {const_name}") for c in imports.module_consts):
+        if not any(c.startswith(f"const {const_name}") for c in imports.component_consts):
             cols = []
             for fname in block.columns:
                 f = entity.fields[fname]
@@ -512,7 +505,7 @@ def _render_block(block: Block, spec: AppSpec, imports: _Imports, indent: int = 
                 else:
                     render, value, align = f"(r) => r.{fname}", f"(r) => r.{fname}", ""
                 cols.append(f"  {{ key: {_q(fname)}, header: {_q(header)}, render: {render}, value: {value}{align} }},")
-            imports.module_consts.append(f"const {const_name}: Column<{block.entity}>[] = [\n" + "\n".join(cols) + "\n];")
+            imports.component_consts.append(f"const {const_name}: Column<{block.entity}>[] = [\n" + "\n".join(cols) + "\n];")
         source = rows
         if block.sort_field and block.limit:
             imports.queries.add("latest")
@@ -630,13 +623,29 @@ def page_tsx(page: PageSpec, spec: AppSpec) -> str:
     imports = _Imports()
     body = "\n".join(_render_block(b, spec, imports) for b in page.blocks)
     consts = ("\n\n" + "\n\n".join(imports.module_consts)) if imports.module_consts else ""
+    inner = ""
+    if imports.component_consts:
+        inner = "\n".join("  " + line for c in imports.component_consts for line in c.split("\n")) + "\n"
     description = f" description={_q(page.description)}" if page.description else ""
+    header = f"<PageHeader title={_q(page.title)}{description} mark={{<Mark id={_q(page.mark)} size={{44}} />}} />"
+    data = ", ".join(sorted(imports.seed))
+    destructure = f"  const {{ ready, {data} }} = useAppData();\n" if data else "  const { ready } = useAppData();\n"
     return (
         f"{imports.render()}{consts}\n\n"
         f"export default function {page.component}() {{\n"
+        f"{destructure}"
+        f"  if (!ready) {{\n"
+        f"    return (\n"
+        f"      <PageBody>\n"
+        f"        {header}\n"
+        f"        <EmptyState title=\"Loading…\" detail=\"Fetching data from the API.\" />\n"
+        f"      </PageBody>\n"
+        f"    );\n"
+        f"  }}\n"
+        f"{inner}"
         f"  return (\n"
         f"    <PageBody>\n"
-        f"      <PageHeader title={_q(page.title)}{description} mark={{<Mark id={_q(page.mark)} size={{44}} />}} />\n"
+        f"      {header}\n"
         f"{body}\n"
         f"    </PageBody>\n"
         f"  );\n"
@@ -652,7 +661,7 @@ def custom_component_spec(page: PageSpec, block: Block, spec: AppSpec) -> dict[s
         "component_name": block.name,
         "description": (
             f"{block.description} Used on the {page.title} page. Takes no props. "
-            f"Import data from '../data/seed' ({datasets}) and types from '../data/types'; "
+            f"Read data with `const {{ ready, ... }} = useAppData()` from '../data/store' ({datasets}; render nothing until ready) and types from '../data/types'; "
             f"helpers count/sum/avg/series/top/lookup from '../data/queries'."
         ),
         "mark": page.mark,
@@ -660,14 +669,27 @@ def custom_component_spec(page: PageSpec, block: Block, spec: AppSpec) -> dict[s
     }
 
 
+def fixed_paths(spec: AppSpec) -> list[str]:
+    """Paths of the non-page files `compose` writes, in write order (known before the seed exists)."""
+    from app.engines import api_kit
+
+    return ["app.spec.json", "src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts", "src/data/store.ts"] + sorted(
+        api_kit.api_files(spec, {n: [] for n in spec.entities})
+    )
+
+
 def compose(spec: AppSpec, seed_rows: dict[str, list[dict[str, Any]]]) -> dict[str, str]:
-    """Every deterministic file of the app, keyed by workspace path."""
+    """Every deterministic file of the app, keyed by workspace path (pages, data layer and the API kit)."""
+    from app.engines import api_kit
+
     files = {
         "app.spec.json": json.dumps(spec.model_dump(), ensure_ascii=False, indent=2) + "\n",
         "src/data/types.ts": types_ts(spec),
         "src/data/queries.ts": QUERIES_TS,
         "src/data/seed.ts": seed_ts(spec, seed_rows),
+        "src/data/store.ts": api_kit.app_store_ts(spec),
     }
     for page in spec.pages:
         files[f"src/pages/{page.component}.tsx"] = page_tsx(page, spec)
+    files.update(api_kit.api_files(spec, seed_rows))
     return files

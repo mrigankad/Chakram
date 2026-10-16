@@ -84,7 +84,7 @@ def test_custom_blocks_get_unique_component_names():
     names = [b.name for _p, b in spec.custom_blocks()]
     assert names == ["Planner", "Planner2", "Custom"]
     files = [f["path"] for f in spec.to_plan_dict()["files"]]
-    assert "src/components/Planner2.tsx" in files and files[:3] == ["src/data/types.ts", "src/data/seed.ts", "src/data/queries.ts"]
+    assert files[:3] == ["src/components/Planner.tsx", "src/components/Planner2.tsx", "src/components/Custom.tsx"]
 
 
 def test_errors_name_what_to_fix():

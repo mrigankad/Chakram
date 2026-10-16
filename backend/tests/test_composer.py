@@ -93,14 +93,19 @@ def test_every_composed_file_passes_the_structural_check():
             continue
         result = verify_file(path, content, kit_exports=set(kit.kit_exports()), workspace_files=known, planned_files=set(files))
         assert result.ok, f"{path}: {result.problems}"
-    assert set(files) == {"app.spec.json", "src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts", "src/pages/Overview.tsx", "src/pages/Doctors.tsx"}
+    assert {p for p in files if not p.startswith("api/")} == {
+        "app.spec.json", "src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts", "src/data/store.ts", "src/pages/Overview.tsx", "src/pages/Doctors.tsx"}
+    assert {p for p in files if p.startswith("api/")} == {
+        "api/package.json", "api/tsconfig.json", "api/.env.example", "api/README.md", "api/migrations/0001_init.sql", "api/src/schema.ts",
+        "api/src/store.ts", "api/src/auth.ts", "api/src/routes.ts", "api/src/index.ts", "api/src/seed.ts", "api/src/seed.json"}
 
 
 def test_pages_import_only_what_they_use_and_bind_to_the_seed():
     _spec, _rows, _w, files = _compose()
     overview = files["src/pages/Overview.tsx"]
     assert "LineChart" in overview and "DonutChart" not in overview
-    assert "import { appointments, doctors } from '../data/seed';" in overview
+    assert "const { ready, appointments, doctors } = useAppData();" in overview
+    assert "import { useAppData } from '../data/store';" in overview
     assert "lookup(doctors, r.doctor, \"name\")" in overview
     assert 'defaultSort={{ key: "start", dir: "desc" }}' in overview
     doctors = files["src/pages/Doctors.tsx"]
@@ -112,12 +117,28 @@ def test_pages_import_only_what_they_use_and_bind_to_the_seed():
     assert "doctor: string; // Doctor id" in types
 
 
+def test_api_kit_follows_the_entities():
+    _spec, _rows, _w, files = _compose()
+    sql = files["api/migrations/0001_init.sql"]
+    assert "create table if not exists appointments (" in sql and "doctor text not null," in sql
+    assert "check (status in ('scheduled', 'done', 'cancelled'))" in sql
+    assert "create index if not exists appointments_doctor_idx" in sql
+    schema = files["api/src/schema.ts"]
+    assert "export const AppointmentSchema = z.object({" in schema and "satisfaction: z.number().min(0).max(1)," in schema
+    assert 'Appointment: { collection: "appointments", table: "appointments", schema: AppointmentSchema, refs: { doctor: "Doctor" } }' in schema
+    assert "import seed from './seed.json'" in files["api/src/seed.ts"]
+    store = files["src/data/store.ts"]
+    assert "request<{ rows: Appointment[] }>('/api/appointments?limit=500')" in store
+    assert "create: (data: Omit<Doctor, 'id'>) => request<Doctor>('/api/doctors'" in store
+    assert '"name": "clinic-appointments-api"' in files["api/package.json"]
+
+
 def test_custom_block_spec_tells_the_model_what_data_exists():
     spec, _rows, _w, _files = _compose()
     page, block = spec.custom_blocks()[0]
     file_spec = composer.custom_component_spec(page, block, spec)
     assert file_spec["path"] == "src/components/ShiftPlanner.tsx"
-    assert "appointments (Appointment[])" in file_spec["description"] and "'../data/queries'" in file_spec["description"]
+    assert "appointments (Appointment[])" in file_spec["description"] and "useAppData()" in file_spec["description"]
 
 
 def test_golden_app_matches_the_composer_output():

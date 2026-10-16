@@ -222,6 +222,9 @@ def verify_file(
                     problems.append(f"'{spec}' does not export {', '.join(sorted(missing))}")
             continue
         candidates = [target] + [target + ext for ext in _LOCAL_EXTENSIONS] + [f"{target}/index{ext}" for ext in _LOCAL_EXTENSIONS[:4]]
+        if target.endswith(".js"):
+            # NodeNext style: './store.js' names the compiled form of store.ts (the API kit uses it).
+            candidates += [target[:-3] + ".ts", target[:-3] + ".tsx"]
         if known or planned:
             if not any(c in known or c in planned for c in candidates):
                 problems.append(f"import of '{spec}' which is not a file in this app")

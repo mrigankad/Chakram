@@ -190,6 +190,11 @@ PID only. Do not touch Docker containers other than `aidlc-mongo`.
   saved as `app.spec.json`. When no usable spec can be planned the run falls back to
   per-file generation. `backend/tests/golden/composed_app` is the composer's golden
   output; `cd frontend && npm run check:composed` type-checks it against the kit (CI).
+- **API kit** (`docs/chakram/API_KIT.md`): composed apps also get `api/` (Hono + zod +
+  PostgreSQL, org-scoped CRUD per entity, sessions and roles, SQL migrations, seed) from
+  `engines/api_kit.py`, and `src/data/store.ts` (`useAppData()`: seed or live API via
+  `VITE_API_URL`). `npm run check:api-kit` type-checks the golden kit with its pinned
+  dependencies (CI).
 - **Design packs** (`docs/chakram/DESIGN_PACKS.md`): a client's visual system as a zip
   (`pack.json`, `pack.css`, optional `README.md`, `brand/logo.svg`), validated and stored per
   org (`design_packs`), chosen when an app is created and installed under `src/design/`.

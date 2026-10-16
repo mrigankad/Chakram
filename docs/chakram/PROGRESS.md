@@ -79,3 +79,15 @@ Checks: backend 664 passed / 1 skipped, frontend tsc clean, 525 vitest passed, `
 **Not done**: structural edits in the Design tab do not recompose from the spec yet (text and class edits still write to the TSX, which keeps working). `app.spec.json` is written so that can be added without a format change. No live model run here; the first real build will show whether `kimi-k3:cloud` produces a valid spec on the first try (the repair turn and the fallback cover the failure modes).
 
 **Next task:** T-060 (API kit from entities: the spec's entities already carry what it needs) or T-030 (Chakram adopts the kit tokens). Suggested: T-060, since it completes the "same API every time" goal and the issue-tracker journey in the blueprint.
+
+## 2026-10-16 — Phase C started: the API kit (T-060 partial)
+
+Checks: backend 665 passed / 1 skipped; `npm run check:composed` and `npm run check:api-kit` pass (the golden kit installs its pinned hono/zod/postgres and type-checks under NodeNext); CI runs both.
+
+- Every composed app now ships `api/` (`docs/chakram/API_KIT.md`): the same Hono service for every app with zod schemas, a PostgreSQL store and an in-memory dev store, scrypt passwords and server-side sessions, roles owner/member/viewer, org-scoped CRUD per entity with ref checks, numbered SQL migrations, a seed loader and a README. Only entities differ between apps; the model writes none of it.
+- `src/data/store.ts` gives pages `useAppData()`: the seed by default, the API when `VITE_API_URL` is set, plus typed `create/update/remove`. Composed pages render a loading state until data is ready and build their table columns inside the component so lookups see live rows.
+- The first `check:api-kit` run caught real errors (NodeNext needs explicit `.js` import extensions); fixed and kept as a CI gate.
+
+**Not done**: form and detail blocks (the UI for writes), uploads, jobs, webhooks, a Vercel function wrapper, and a live PostgreSQL run of the blueprint's BE 01–04 checks.
+
+**Next task:** T-070/T-071 (verify stage: spec-derived test cases against a built app; one TestRun shape across both engines) or T-030 (Chakram adopts the kit tokens).

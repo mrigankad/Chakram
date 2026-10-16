@@ -158,7 +158,7 @@ class AppSpec(BaseModel):
 
     def to_plan_dict(self) -> dict[str, Any]:
         """The PLAN event / run shape the client already understands."""
-        files = [{"path": "src/data/types.ts"}, {"path": "src/data/seed.ts"}, {"path": "src/data/queries.ts"}]
+        files: list[dict[str, Any]] = []
         for page, block in self.custom_blocks():
             files.append({"path": f"src/components/{block.name}.tsx", "component_name": block.name})
         for page in self.pages:

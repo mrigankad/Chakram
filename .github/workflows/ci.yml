@@ -35,6 +35,8 @@ jobs:
         run: npm run build
       - name: Composed app type-checks against the kit
         run: npm run check:composed
+      - name: Generated API kit type-checks with its pinned dependencies
+        run: npm run check:api-kit
       # The codebase still has known lint errors; report them without blocking merges.
       - name: Lint (non-blocking)
         continue-on-error: true

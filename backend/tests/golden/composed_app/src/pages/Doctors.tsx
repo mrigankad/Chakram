@@ -1,6 +1,6 @@
-import { BarChart, DataTable, DonutChart, Grid, Mark, PageBody, PageHeader, Panel, ProgressBars, StatusBadge, count as formatCount, usd } from '../chronos';
+import { BarChart, DataTable, DonutChart, EmptyState, Grid, Mark, PageBody, PageHeader, Panel, ProgressBars, StatusBadge, count as formatCount, usd } from '../chronos';
 import type { Column, StatusTone } from '../chronos';
-import { appointments, doctors } from '../data/seed';
+import { useAppData } from '../data/store';
 import type { Doctor } from '../data/types';
 import { latest, lookup, series, top } from '../data/queries';
 import ShiftPlanner from '../components/ShiftPlanner';
@@ -9,13 +9,21 @@ const appointmentStatusTone: Record<string, StatusTone> = { "scheduled": "info",
 
 const doctorSpecialityTone: Record<string, StatusTone> = { "Cardiology": "neutral", "Dermatology": "neutral", "General": "neutral" };
 
-const doctorsColumns: Column<Doctor>[] = [
-  { key: "name", header: "Name", render: (r) => r.name, value: (r) => r.name },
-  { key: "speciality", header: "Speciality", render: (r) => <StatusBadge tone={doctorSpecialityTone[r.speciality] ?? 'neutral'}>{r.speciality}</StatusBadge>, value: (r) => r.speciality },
-  { key: "email", header: "Email", render: (r) => r.email, value: (r) => r.email },
-];
-
 export default function Doctors() {
+  const { ready, appointments, doctors } = useAppData();
+  if (!ready) {
+    return (
+      <PageBody>
+        <PageHeader title="Doctors" mark={<Mark id="mark-command" size={44} />} />
+        <EmptyState title="Loading…" detail="Fetching data from the API." />
+      </PageBody>
+    );
+  }
+  const doctorsColumns: Column<Doctor>[] = [
+    { key: "name", header: "Name", render: (r) => r.name, value: (r) => r.name },
+    { key: "speciality", header: "Speciality", render: (r) => <StatusBadge tone={doctorSpecialityTone[r.speciality] ?? 'neutral'}>{r.speciality}</StatusBadge>, value: (r) => r.speciality },
+    { key: "email", header: "Email", render: (r) => r.email, value: (r) => r.email },
+  ];
   return (
     <PageBody>
       <PageHeader title="Doctors" mark={<Mark id="mark-command" size={44} />} />

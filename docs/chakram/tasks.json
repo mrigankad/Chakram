@@ -354,11 +354,12 @@
         "BE 05",
         "REL 04"
       ],
-      "status": "todo",
+      "status": "partial",
       "files": [
         "backend/app/templates/api_kit/*",
         "backend/app/engines/composer/api.py"
-      ]
+      ],
+      "evidence": "engines/api_kit.py renders api/ (Hono + zod + postgres: schema.ts, store.ts with PgStore/MemoryStore, auth.ts scrypt+sessions+roles, routes.ts org-scoped CRUD, index.ts, seed, 0001_init.sql, README, .env.example) and src/data/store.ts (useAppData: seed or live API; typed writes); composed pages read through it. Golden kit type-checked with pinned deps by `npm run check:api-kit` (CI). Not done: form/detail blocks, upload/jobs/webhooks, Vercel function wrapper, live PostgreSQL round-trip (BE 01-04 need a database)"
     },
     {
       "id": "T-070",

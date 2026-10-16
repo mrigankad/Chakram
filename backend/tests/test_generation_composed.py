@@ -49,12 +49,14 @@ async def test_a_composed_run_writes_pages_without_the_model(db):
 
     plan = sock.of_type("PLAN")[0]
     assert plan["app_name"] == "Clinic Appointments"
-    assert plan["files"][:3] == ["src/data/types.ts", "src/data/seed.ts", "src/data/queries.ts"]
+    assert plan["files"][:5] == ["app.spec.json", "src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts", "src/data/store.ts"]
+    assert "api/src/routes.ts" in plan["files"] and plan["files"][-2:] == ["src/pages/Overview.tsx", "src/pages/Doctors.tsx"]
     assert [r["path"] for r in plan["routes"]] == ["/", "/doctors"]
 
     # Only the custom block went to the model, with the data files as context.
     assert [s["path"] for s in seen] == ["src/components/ShiftPlanner.tsx"]
-    assert set(seen[0]["context_files"]) == {"src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts"}
+    assert {"src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts", "src/data/store.ts"} <= set(seen[0]["context_files"])
+    assert not any(p.startswith("api/") for p in seen[0]["context_files"])  # the API kit is not page context
 
     files = workspace.files
     assert "export default function Overview()" in files["src/pages/Overview.tsx"]
@@ -67,7 +69,8 @@ async def test_a_composed_run_writes_pages_without_the_model(db):
 
     done = sock.sent[-1]
     assert done["type"] == "GENERATION_DONE" and done["composed"] is True
-    assert done["files_failed"] == 0 and done["files_total"] == 7  # 4 pre + 1 custom + 2 pages
+    assert done["files_failed"] == 0 and done["files_total"] == 20  # 17 fixed (data layer + API kit) + 1 custom + 2 pages
+    assert "api/migrations/0001_init.sql" in workspace.files
     assert [m["path"] for m in sock.of_type("FILE_DONE")][-2:] == ["src/pages/Overview.tsx", "src/pages/Doctors.tsx"]
     assert sock.of_type("STREAM_TOKEN") and all(m["path"] == "src/components/ShiftPlanner.tsx" for m in sock.of_type("STREAM_TOKEN"))
 

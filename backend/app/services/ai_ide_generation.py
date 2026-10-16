@@ -358,7 +358,8 @@ async def _generate(run: GenerationRun) -> None:
         app_name, description = spec.name, spec.description
         plan_dict = spec.to_plan_dict()
         routes_list = plan_dict["routes"]
-        files_order = [f["path"] for f in plan_dict["files"]]
+        fixed = composer.fixed_paths(spec)
+        files_order = fixed + [f["path"] for f in plan_dict["files"] if f["path"] not in fixed]
         model_files = [composer.custom_component_spec(page, block, spec) for page, block in spec.custom_blocks()]
         emit({"type": "PLAN", "app_name": app_name, "description": description, "files": files_order, "routes": routes_list})
         emit({"type": "STATUS", "message": f"Spec ready: {len(spec.entities)} entities, {len(spec.pages)} pages. Writing seed data…"})
@@ -376,7 +377,7 @@ async def _generate(run: GenerationRun) -> None:
         for warning in seed_warnings:
             run.warnings.append({"path": "src/data/seed.ts", "problems": [warning]})
         composed = composer.compose(spec, rows)
-        for path in ("app.spec.json", "src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts"):
+        for path in composer.fixed_paths(spec):
             pre_files[path] = composed[path]
         for page in spec.pages:
             path = f"src/pages/{page.component}.tsx"
