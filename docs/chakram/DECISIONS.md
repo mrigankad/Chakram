@@ -1,0 +1,23 @@
+# Architecture decisions
+
+Short records. Status is Proposed until the owner confirms; the audit recommends each one.
+
+## ADR-1 Keep the existing stack; no rewrite
+
+**Status:** Proposed. **Context:** FastAPI + Motor + React/Vite + Tailwind builds and passes 1,078 deterministic tests from a clean checkout (`audit/BASELINE_CHECKS.md`). The blueprint says to preserve a serviceable stack and add adapters. **Decision:** Keep FastAPI, MongoDB, React/Vite/Tailwind, the Chronos kit and the sandboxed preview. Replace nothing wholesale. The blueprint's PostgreSQL-for-platform-metadata suggestion is deferred: MongoDB already holds org-scoped data with tests; the durable run log (Phase H) can be a Mongo collection with a unique `(run_id, seq)` index. **Consequences:** No migration tooling exists; Phase C introduces versioned migrations only for *generated* apps, not for Chakram's own database.
+
+## ADR-2 Design packs are the unit of theming, installed per org, stored outside the kit
+
+**Status:** Proposed. **Context:** Theming today is per app, five knobs, and kit upgrades overwrite `src/chronos/*` (GAP-08). Chakram's own UI uses a different token vocabulary (GAP-09). **Decision:** A design pack (`pack.json`, `tokens.css`, `theme.json`, `brand/`, `fonts/`, optional `marks/`, `overrides/`, `README.md`) lives in `src/design/` inside generated apps and in the `design_packs` collection per org. `chronos` is the first pack. The kit reads only CSS variables and semantic Tailwind classes; the theme editor writes a delta (`src/design/overrides.css`), never the pack. Chakram's frontend adopts the kit's token names and loads the org's pack. **Alternatives rejected:** (a) editing `tokens.css` in place (lost on upgrade); (b) a Tailwind preset per client without CSS variables (no runtime switching, no dark mode without a rebuild). **Consequences:** D2 is a mechanical rename across ~30 pages; `tw-classes.test.ts` and a new pack validator are the gates.
+
+## ADR-3 Generated apps: spec-first, composed UI, templated API in TypeScript
+
+**Status:** Proposed; needs the owner's confirmation on the API language. **Context:** Generation writes TSX per page at ~34K prompt tokens with no validation (GAP-05, GAP-06) and produces no backend (GAP-11). **Decision:** The planner emits `app.spec.json` (entities, pages as typed blocks). A deterministic composer renders pages from the kit; only `custom` blocks go to the model. The same spec generates an API kit: entity schemas (zod), CRUD routes with org scoping and roles, versioned migrations, typed client hooks. **API language:** TypeScript (Hono or Fastify) + PostgreSQL + Drizzle, because an exported app should be one language, deploy to Vercel as today (serverless functions) and match the blueprint's supported profile; Chakram's FastAPI backend is unaffected. The in-browser preview runs the same hook contract against an in-memory store so Live preview keeps working without a server. **Alternatives rejected:** (a) keep per-file TSX generation and only slim prompts (Phase A alone): cheaper but still non-deterministic and still no backend; (b) FastAPI for generated apps: two languages per export, no Vercel serverless path without more work. **Consequences:** The composer's block vocabulary limits what can be generated without a `custom` block; that limit is the point. The blueprint's issue-tracker journey becomes a spec fixture.
+
+## ADR-4 One provider interface before a second provider
+
+**Status:** Proposed. **Context:** 36 call sites send a single user message with per-function personas; the App Studio generator is the only caller with a system message (`ai_service.py`, `engines/generator.py`). Azure and Gemini are pilot requirements (blueprint §9). **Decision:** Phase A introduces `complete(system, user, *, json_schema=None, stream=False)` in `ai_service` and moves the static reference into `system`. Provider adapters (Azure OpenAI v1, Gemini via `google-genai`) implement that interface in Phase H; no provider is added until the interface exists and the usage log carries run ids. **Consequences:** Prefix caching becomes possible where the provider supports it; per-function personas are reduced to one shared role line plus task text.
+
+## ADR-5 Hide, don't delete, in Phase 0
+
+**Status:** Proposed. **Context:** The checklist says a deferred feature must be hidden or labelled, and the owner wants the product streamlined. **Decision:** Phase 0 changes `nav-config.ts` only: merged pages move under tabs, parked pages show when their connector is saved, Monitoring leaves the sidebar. Routes, backend modules and data stay. Deletion is a separate decision after one release cycle. **Consequences:** No data loss, no broken deep links, reversible in one commit.
