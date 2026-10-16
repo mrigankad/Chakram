@@ -179,6 +179,8 @@
           "text": "",
           "ratio": "1.4/1",
           "children": [],
+          "fields": [],
+          "submit_label": "",
           "name": "",
           "description": ""
         },
@@ -246,6 +248,8 @@
               "text": "",
               "ratio": "1.4/1",
               "children": [],
+              "fields": [],
+              "submit_label": "",
               "name": "",
               "description": ""
             },
@@ -278,10 +282,14 @@
               "text": "",
               "ratio": "1.4/1",
               "children": [],
+              "fields": [],
+              "submit_label": "",
               "name": "",
               "description": ""
             }
           ],
+          "fields": [],
+          "submit_label": "",
           "name": "",
           "description": ""
         },
@@ -313,6 +321,8 @@
           "text": "",
           "ratio": "1.4/1",
           "children": [],
+          "fields": [],
+          "submit_label": "",
           "name": "",
           "description": ""
         }
@@ -381,6 +391,8 @@
               "text": "",
               "ratio": "1.4/1",
               "children": [],
+              "fields": [],
+              "submit_label": "",
               "name": "",
               "description": ""
             },
@@ -413,6 +425,8 @@
               "text": "",
               "ratio": "1.4/1",
               "children": [],
+              "fields": [],
+              "submit_label": "",
               "name": "",
               "description": ""
             },
@@ -437,10 +451,14 @@
               "text": "",
               "ratio": "1.4/1",
               "children": [],
+              "fields": [],
+              "submit_label": "",
               "name": "",
               "description": ""
             }
           ],
+          "fields": [],
+          "submit_label": "",
           "name": "",
           "description": ""
         },
@@ -478,6 +496,8 @@
           "text": "",
           "ratio": "1.4/1",
           "children": [],
+          "fields": [],
+          "submit_label": "",
           "name": "",
           "description": ""
         },
@@ -506,6 +526,8 @@
           "text": "",
           "ratio": "1.4/1",
           "children": [],
+          "fields": [],
+          "submit_label": "",
           "name": "",
           "description": ""
         },
@@ -530,6 +552,42 @@
           "text": "Seed data only; connect the API before go-live.",
           "ratio": "1.4/1",
           "children": [],
+          "fields": [],
+          "submit_label": "",
+          "name": "",
+          "description": ""
+        },
+        {
+          "type": "form",
+          "title": "Book appointment",
+          "items": [],
+          "kind": "bar",
+          "series": [],
+          "group": null,
+          "format": "number",
+          "entity": "Appointment",
+          "columns": [],
+          "search": true,
+          "badge": "",
+          "sort_field": "",
+          "sort_dir": "desc",
+          "limit": 0,
+          "primary": "",
+          "secondary": "",
+          "metric": null,
+          "text": "",
+          "ratio": "1.4/1",
+          "children": [],
+          "fields": [
+            "patient",
+            "doctor",
+            "start",
+            "status",
+            "fee",
+            "notes",
+            "paid"
+          ],
+          "submit_label": "Book",
           "name": "",
           "description": ""
         },
@@ -554,6 +612,8 @@
           "text": "",
           "ratio": "1.4/1",
           "children": [],
+          "fields": [],
+          "submit_label": "",
           "name": "ShiftPlanner",
           "description": "A week grid of doctor shifts with a toggle per slot."
         }

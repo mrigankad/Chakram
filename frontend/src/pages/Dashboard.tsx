@@ -16,8 +16,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useQuery } from "@tanstack/react-query";
 import { useDashboardStats } from "@/hooks/use-dashboard";
-import type { DashboardActivityItem } from "@/lib/api";
+import { PROJECTS_QUERY_KEY, api, type DashboardActivityItem, type Project } from "@/lib/api";
+import { stageLabel, stageTone } from "@/lib/project-stages";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { ChartTooltipBox, DashboardKpi, DashboardPanel } from "@/components/dashboard/DashboardUi";
@@ -53,6 +55,50 @@ const WORKFLOW = [
   { step: 3, mark: "mark-test-execution" as const, title: "Execute tests", desc: "Run the suite in a browser against your app.", url: "/test-execution" },
   { step: 4, mark: "mark-risk-ranking" as const, title: "Risk ranking", desc: "See cases ranked by failure history and severity.", url: "/prioritization" },
 ];
+
+/** The five most recently updated projects with their Verify and Release stages; one line to App Studio when there are none. */
+function ProjectsPanel({ projects, isError }: { projects: Project[] | undefined; isError: boolean }) {
+  const recent = [...(projects ?? [])]
+    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
+    .slice(0, 5);
+  return (
+    <DashboardPanel
+      title="Projects"
+      noPadding
+      badge={
+        <Link to="/projects" className="inline-flex items-center gap-1 text-xs font-medium text-ink-secondary hover:text-ink">
+          View all <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      }
+    >
+      {recent.length === 0 ? (
+        <p className="px-4 py-3 text-xs text-ink-tertiary">
+          {isError ? "Projects could not be loaded." : "No projects yet."}{" "}
+          <Link to="/ai-ide" className="font-medium text-ink-secondary hover:text-ink hover:underline">
+            Build one in App Studio
+          </Link>{" "}
+          or import a repository from <Link to="/projects" className="font-medium text-ink-secondary hover:text-ink hover:underline">Projects</Link>.
+        </p>
+      ) : (
+        <ul className="divide-y divide-border/60">
+          {recent.map((p) => (
+            <li key={p.id} className="flex items-center gap-3 px-4 py-2">
+              <Link to={`/projects/${encodeURIComponent(p.id)}`} className="min-w-0 flex-1 truncate text-sm font-medium text-ink hover:underline" title={p.name}>
+                {p.name}
+              </Link>
+              <StatusBadge tone={stageTone(p.stages?.verify?.status)} title={`Verify: ${p.stages?.verify?.detail ?? ""}`}>
+                {stageLabel(p.stages?.verify?.status)}
+              </StatusBadge>
+              <StatusBadge tone={stageTone(p.stages?.release?.status)} title={`Release: ${p.stages?.release?.detail ?? ""}`}>
+                {stageLabel(p.stages?.release?.status)}
+              </StatusBadge>
+            </li>
+          ))}
+        </ul>
+      )}
+    </DashboardPanel>
+  );
+}
 
 /** "Tue 13 Oct" from the ISO date the API sends; the bare weekday if the date is missing. */
 function formatTrendDay(iso: unknown, fallback: unknown): string {
@@ -179,6 +225,8 @@ const Dashboard = () => {
     { mark: "mark-risk-ranking" as const, label: "High-priority cases", value: count(stats?.high_priority) },
   ];
 
+  const projects = useQuery({ queryKey: PROJECTS_QUERY_KEY, queryFn: api.listProjects });
+
   if (isLoading) {
     return (
       <PageShell className="flex min-h-[50vh] items-center justify-center">
@@ -199,6 +247,8 @@ const Dashboard = () => {
       />
 
       {isError && <p className="text-sm text-destructive">Could not load dashboard stats. Start the backend and refresh.</p>}
+
+      <ProjectsPanel projects={projects.data} isError={projects.isError} />
 
       <DashboardPanel title="Guided workflow" subtitle="Four steps from requirement to ranked results" noPadding>
         <ol className="grid sm:grid-cols-2 xl:grid-cols-4">

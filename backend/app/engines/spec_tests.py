@@ -176,6 +176,25 @@ def _block_cases(spec: AppSpec, rows: dict[str, list[dict[str, Any]]], page: Pag
             f"It shows the text: {block.text[:120]}",
             "Low",
         )
+    elif block.type == "form":
+        entity = spec.entities[block.entity]
+        _an = lambda w: f"an {w}" if w[:1] in "aeiou" else f"a {w}"  # noqa: E731
+        required = [entity.fields[f].label for f in block.fields if entity.fields[f].kind in ("string", "email", "url", "ref", "date", "datetime")]
+        add(
+            "functional",
+            f"{page.title}: create {_an(entity.label.lower())} with the {block.title} form",
+            f"On {page.title}, fill every field of the \"{block.title}\" form with valid values and press \"{block.submit_label}\".",
+            f"A \"{entity.label} saved\" badge appears and the new {entity.label.lower()} is listed on the page (or in the {entity.label.lower()} table).",
+            "High",
+        )
+        if required:
+            add(
+                "edge",
+                f"{page.title}: the {block.title} form rejects an empty submission",
+                f"On {page.title}, press \"{block.submit_label}\" without filling the form.",
+                f"An error badge names the required fields ({', '.join(required[:4])}) and nothing is saved.",
+                "Medium",
+            )
     elif block.type == "custom":
         add(
             "functional",

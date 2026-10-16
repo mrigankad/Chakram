@@ -217,7 +217,7 @@
         "backend/app/templates/chronos_kit/src/chronos/app-shell.tsx",
         "backend/app/engines/kit.py"
       ],
-      "evidence": "Kit 9 reads --font-sans/--font-display/--radius-lg/--shell-sidebar-width and AppShell logoSrc; chronos extracted to templates/design_packs/chronos; apps get src/design/* via design_pack_service.install; preview orders tokens \u2192 pack.css \u2192 design.css and imports .svg"
+      "evidence": "Kit 9 reads --font-sans/--font-display/--radius-lg/--shell-sidebar-width and AppShell logoSrc; chronos extracted to templates/design_packs/chronos; apps get src/design/* via design_pack_service.install; preview orders tokens → pack.css → design.css and imports .svg"
     },
     {
       "id": "T-021",
@@ -235,7 +235,7 @@
         "backend/app/routes/design_packs.py",
         "frontend/src/pages/ConnectorsSettings.tsx"
       ],
-      "evidence": "design_pack_service.validate (metadata, logo, contrast, coverage warnings); zip upload, list, default, delete routes under /ai-ide/design-packs; Settings \u2192 Design System UI; org default on the organizations doc"
+      "evidence": "design_pack_service.validate (metadata, logo, contrast, coverage warnings); zip upload, list, default, delete routes under /ai-ide/design-packs; Settings → Design System UI; org default on the organizations doc"
     },
     {
       "id": "T-022",
@@ -434,7 +434,7 @@
         "backend/app/routes/organizations.py",
         "frontend/src/pages/ConnectorsSettings.tsx"
       ],
-      "evidence": "services/connector_registry.py (feeds, pinned API versions, read-only checks for ollama/github/vercel/jira/slack); GET /orgs/current/connectors/status, POST \u2026/{id}/check; Datadog removed everywhere; Settings shows 'Enables' + API version + Check connection; Incidents gated on Slack. tests/test_connector_registry.py"
+      "evidence": "services/connector_registry.py (feeds, pinned API versions, read-only checks for ollama/github/vercel/jira/slack); GET /orgs/current/connectors/status, POST …/{id}/check; Datadog removed everywhere; Settings shows 'Enables' + API version + Check connection; Incidents gated on Slack. tests/test_connector_registry.py"
     },
     {
       "id": "T-110",
@@ -464,11 +464,15 @@
         "REL 03",
         "REL 06"
       ],
-      "status": "todo",
+      "status": "done",
       "files": [
-        "frontend/src/pages/SDLCPipeline.tsx",
-        "backend/app/routes/release_gate.py"
-      ]
+        "backend/app/services/project_service.py",
+        "backend/app/routes/projects.py",
+        "frontend/src/pages/Projects.tsx",
+        "frontend/src/pages/ProjectView.tsx",
+        "frontend/src/lib/project-stages.ts"
+      ],
+      "notes": "Projects list and project view read the record; Operate pings the deployed app's /api/health and /api/ready; the project gate scores the project's own runs and health. Release Gate page (Jira-fed) untouched."
     },
     {
       "id": "T-130",
@@ -481,11 +485,14 @@
         "BE 03",
         "BE 04"
       ],
-      "status": "todo",
+      "status": "partial",
       "files": [
         "backend/app/engines/spec.py",
-        "backend/app/engines/composer.py"
-      ]
+        "backend/app/engines/composer.py",
+        "backend/app/engines/api_kit.py",
+        "backend/app/engines/spec_tests.py"
+      ],
+      "notes": "form block done (composed create form, in-memory or API writes, spec-derived create/empty-submit cases). Open: detail block (edit/delete), issue-tracker journey against a live PostgreSQL."
     },
     {
       "id": "T-140",

@@ -12,6 +12,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
 from bson import ObjectId
 
 logger = logging.getLogger(__name__)
@@ -210,3 +211,107 @@ async def list_projects(db, org_id: str) -> list[dict[str, Any]]:
 async def get_by_workspace(db, org_id: str, workspace_id: str) -> dict[str, Any] | None:
     doc = await db[COLLECTION].find_one({"org_id": org_id, "workspace_id": workspace_id})
     return _public(doc) if doc else None
+
+
+# ── Operate: the deployed app's own health (ADR-8) ──────────────────────────
+
+HEALTH_TIMEOUT = 6.0
+
+
+def _deployed_url(project: dict[str, Any]) -> str | None:
+    url = ((project.get("last_deployment") or {}).get("url") or "").strip()
+    if not url:
+        return None
+    return url if url.startswith(("http://", "https://")) else f"https://{url}"
+
+
+async def check_health(db, org_id: str, project_id: str) -> dict[str, Any] | None:
+    """Probe the deployment's /api/health and /api/ready; store and return the result."""
+    project = await get(db, org_id, project_id)
+    if project is None:
+        return None
+    url = _deployed_url(project)
+    checked_at = _now()
+    if not url:
+        result = {"url": None, "ok": False, "health": None, "ready": None, "message": "No deployment yet.", "checked_at": checked_at}
+    else:
+        result = {"url": url, "ok": False, "health": None, "ready": None, "message": "", "checked_at": checked_at}
+        try:
+            async with httpx.AsyncClient(timeout=HEALTH_TIMEOUT, follow_redirects=True) as client:
+                health = await client.get(f"{url.rstrip('/')}/api/health")
+                result["health"] = health.status_code
+                try:
+                    ready = await client.get(f"{url.rstrip('/')}/api/ready")
+                    result["ready"] = ready.status_code
+                except httpx.HTTPError:
+                    result["ready"] = None
+            if health.status_code == 200:
+                result["ok"] = True
+                result["message"] = "The deployed app answers its health check." + ("" if result["ready"] == 200 else " Readiness did not answer 200 (no API deployed with the app, or the store is down).")
+            elif health.status_code == 404:
+                result["message"] = "The deployment is reachable but has no /api/health: a frontend-only deployment."
+                # A reachable frontend is still a live deployment; say so without claiming an API.
+                result["ok"] = True
+            else:
+                result["message"] = f"/api/health answered {health.status_code}."
+        except httpx.TimeoutException:
+            result["message"] = f"The deployment did not answer within {int(HEALTH_TIMEOUT)}s."
+        except httpx.HTTPError as exc:
+            result["message"] = f"Could not reach the deployment: {exc.__class__.__name__}."
+    await db[COLLECTION].update_one({"_id": ObjectId(project_id), "org_id": org_id}, {"$set": {"last_health": result, "updated_at": _now()}})
+    return result
+
+
+# ── Release: a gate scored from the project's own evidence ──────────────────
+
+def gate_from(project: dict[str, Any]) -> dict[str, Any]:
+    """GO / CAUTION / NO_GO / INSUFFICIENT_DATA from the latest test run and the deployment.
+
+    Pure and honest: only what was measured counts, and every unmeasured signal is listed.
+    """
+    run = project.get("latest_run")
+    deployment = project.get("last_deployment")
+    health = project.get("last_health")
+    not_evaluated: dict[str, str] = {}
+    signals: dict[str, Any] = {}
+    if run is None:
+        not_evaluated["test_pass_rate"] = "No test run for this project yet (use Test this app)."
+    elif run.get("status") == "running":
+        not_evaluated["test_pass_rate"] = "A test run is still in progress."
+    elif run.get("pass_rate") is None:
+        not_evaluated["test_pass_rate"] = "The last run executed nothing (every case was skipped)."
+    else:
+        signals["test_pass_rate"] = run["pass_rate"]
+        signals["tests"] = {"passed": run["passed"], "failed": run["failed"], "skipped": run["skipped"], "run_id": run["run_id"]}
+    if deployment:
+        signals["deployment_state"] = deployment.get("state")
+    else:
+        not_evaluated["deployment_state"] = "Not deployed yet."
+    if health:
+        signals["deployment_health"] = bool(health.get("ok"))
+    else:
+        not_evaluated["deployment_health"] = "Health has not been checked yet."
+    not_evaluated["unresolved_security_findings"] = "No security scanner is connected."
+    not_evaluated["open_critical_bugs"] = "Issue-tracker bugs are not read for projects (optional signal)."
+
+    rate = signals.get("test_pass_rate")
+    if rate is None:
+        verdict, reason = "INSUFFICIENT_DATA", "No executed test run to score."
+    else:
+        failed = signals["tests"]["failed"]
+        if rate >= 0.95 and failed == 0:
+            verdict, reason = "GO", "All executed cases passed."
+        elif rate >= 0.8:
+            verdict, reason = "CAUTION", f"{failed} case(s) failed in the last run."
+        else:
+            verdict, reason = "NO_GO", f"Pass rate {round(rate * 100)}% is below 80%."
+        if signals.get("deployment_health") is False and verdict != "NO_GO":
+            verdict, reason = "CAUTION", reason + " The deployment failed its last health check."
+    return {
+        "verdict": verdict,
+        "reason": reason,
+        "score": round(rate * 100) if rate is not None else None,
+        "signals": signals,
+        "not_evaluated": not_evaluated,
+        "evaluated_at": _now(),
+    }

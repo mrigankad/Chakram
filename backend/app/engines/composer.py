@@ -613,10 +613,158 @@ def _render_block(block: Block, spec: AppSpec, imports: _Imports, indent: int = 
         inner = "\n".join(_render_block(c, spec, imports, indent + 2) for c in block.children)
         return f"{pad}<Grid>\n{inner}\n{pad}</Grid>"
 
+    if block.type == "form":
+        name = f"{block.entity}Form"
+        imports.components.add(name)
+        return f"{pad}<{name} />"
+
     if block.type == "custom":
         imports.components.add(block.name)
         return f"{pad}<{block.name} />"
     return ""
+
+
+# ── forms ────────────────────────────────────────────────────────────────────
+
+def _input_for(fname: str, field: FieldSpec, spec: AppSpec) -> tuple[str, str]:
+    """(control JSX, initial value expression) for one form field."""
+    label = _q(field.label)
+    common = f"id={{`${{formId}}-{fname}`}} name={_q(fname)}"
+    cls = "\"w-full rounded-lg border border-muted bg-container px-3 py-2 text-body-md text-primary placeholder:text-quaternary focus-visible:ring-2 ring-active\""
+    if field.kind == "enum":
+        options = "".join(f"<option value={_q(v)}>{v}</option>" for v in field.values)
+        return (f"<select {common} className={cls} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}}>{options}</select>", _q(field.values[0]))
+    if field.kind == "ref" and field.ref in spec.entities:
+        target = spec.entities[field.ref]
+        rows = collection_name(field.ref)
+        return (
+            f"<select {common} className={cls} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}}>"
+            f"<option value=\"\">Select…</option>{{{rows}.map((r) => <option key={{r.id}} value={{r.id}}>{{String(r.{target.label_field})}}</option>)}}</select>",
+            '""',
+        )
+    if field.kind == "boolean":
+        return (f"<input {common} type=\"checkbox\" className=\"size-4 rounded border-muted\" checked={{Boolean(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.checked)}} />", "false")
+    if field.kind == "text":
+        return (f"<textarea {common} className={cls} rows={{3}} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
+    if field.kind in ("number", "money", "percent"):
+        step = ' step="0.01"' if field.kind != "number" else ""
+        return (f"<input {common} type=\"number\"{step} className={cls} value={{values.{fname} === '' ? '' : Number(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value === '' ? '' : Number(e.target.value))}} />", "0")
+    if field.kind == "date":
+        return (f"<input {common} type=\"date\" className={cls} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
+    if field.kind == "datetime":
+        return (f"<input {common} type=\"datetime-local\" className={cls} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
+    kind = {"email": "email", "url": "url"}.get(field.kind, "text")
+    return (f"<input {common} type=\"{kind}\" className={cls} value={{String(values.{fname})}} onChange={{(e) => set({_q(fname)}, e.target.value)}} />", '""')
+
+
+def form_tsx(block: Block, spec: AppSpec) -> str:
+    """A create form for one entity: controlled inputs, required checks, api.create, inline result."""
+    entity = spec.entities[block.entity]
+    rows = collection_name(block.entity)
+    refs = sorted({collection_name(entity.fields[f].ref) for f in block.fields if entity.fields[f].kind == "ref" and entity.fields[f].ref in spec.entities})
+    data_imports = ", ".join(["ready"] + refs) if refs else "ready"
+    initial = ", ".join(f"{f}: {_input_for(f, entity.fields[f], spec)[1]}" for f in block.fields)
+    required = [f for f in block.fields if entity.fields[f].kind in ("string", "email", "url", "ref", "date", "datetime")]
+    controls = []
+    for f in block.fields:
+        control, _ = _input_for(f, entity.fields[f], spec)
+        controls.append(
+            f"        <label className=\"block\">\n"
+            f"          <span className=\"mb-1 block text-label-sm text-secondary\">{entity.fields[f].label}{' *' if f in required else ''}</span>\n"
+            f"          {control}\n"
+            f"        </label>"
+        )
+    conversions = []
+    for f in block.fields:
+        kind = entity.fields[f].kind
+        if kind == "datetime":
+            conversions.append(f"      {f}: values.{f} ? new Date(String(values.{f})).toISOString() : '',")
+        elif kind in ("number", "money", "percent"):
+            conversions.append(f"      {f}: Number(values.{f}) || 0,")
+        elif kind == "boolean":
+            conversions.append(f"      {f}: Boolean(values.{f}),")
+        elif kind == "enum":
+            conversions.append(f"      {f}: String(values.{f}) as {block.entity}['{f}'],")
+        else:
+            conversions.append(f"      {f}: String(values.{f}),")
+    # Fields the spec has but the form does not show get a neutral default so the row is complete.
+    for fname, fs in entity.fields.items():
+        if fname == "id" or fname in block.fields:
+            continue
+        default = {"number": "0", "money": "0", "percent": "0", "boolean": "false"}.get(fs.kind)
+        if fs.kind == "enum":
+            default = _q(fs.values[0])
+        elif fs.kind in ("date", "datetime"):
+            default = "new Date().toISOString()" if fs.kind == "datetime" else "new Date().toISOString().slice(0, 10)"
+        elif default is None:
+            default = '""'
+        conversions.append(f"      {fname}: {default},")
+    required_check = (
+        "    const missing = [" + ", ".join(f"{_q(f)}" for f in required) + "].filter((f) => String(values[f as keyof typeof values] ?? '').trim() === '');\n"
+        "    if (missing.length) {\n"
+        "      setMessage({ tone: 'error', text: `Required: ${missing.join(', ')}` });\n"
+        "      return;\n"
+        "    }\n"
+    ) if required else ""
+    return (
+        f"import {{ useId, useState, type FormEvent }} from 'react';\n"
+        f"import {{ Panel, StatusBadge }} from '../chronos';\n"
+        f"import {{ api, useAppData }} from '../data/store';\n"
+        f"import type {{ {block.entity} }} from '../data/types';\n\n"
+        f"const initial = {{ {initial} }};\n\n"
+        f"export default function {block.entity}Form() {{\n"
+        f"  const {{ {data_imports} }} = useAppData();\n"
+        f"  const formId = useId();\n"
+        f"  const [values, setValues] = useState<Record<string, string | number | boolean>>(initial);\n"
+        f"  const [busy, setBusy] = useState(false);\n"
+        f"  const [message, setMessage] = useState<{{ tone: 'success' | 'error'; text: string }} | null>(null);\n"
+        f"  const set = (field: string, value: string | number | boolean) => setValues((v) => ({{ ...v, [field]: value }}));\n\n"
+        f"  async function submit(event: FormEvent<HTMLFormElement>) {{\n"
+        f"    event.preventDefault();\n"
+        f"    if (!ready) return;\n"
+        f"{required_check}"
+        f"    const data: Omit<{block.entity}, 'id'> = {{\n" + "\n".join(conversions) + "\n    };\n"
+        f"    setBusy(true);\n"
+        f"    try {{\n"
+        f"      await api.{rows}.create(data);\n"
+        f"      setValues(initial);\n"
+        f"      setMessage({{ tone: 'success', text: {_q(entity.label + ' saved')} }});\n"
+        f"    }} catch (err) {{\n"
+        f"      setMessage({{ tone: 'error', text: err instanceof Error ? err.message : String(err) }});\n"
+        f"    }} finally {{\n"
+        f"      setBusy(false);\n"
+        f"    }}\n"
+        f"  }}\n\n"
+        f"  return (\n"
+        f"    <Panel title={_q(block.title)}>\n"
+        f"      <form onSubmit={{submit}} className=\"grid gap-3 sm:grid-cols-2\" aria-label={_q(block.title)}>\n"
+        + "\n".join(controls) + "\n"
+        f"        <div className=\"flex items-center gap-3 sm:col-span-2\">\n"
+        f"          <button type=\"submit\" disabled={{busy || !ready}} className=\"rounded-full bg-action-primary px-3 py-1.5 text-label-sm text-on-color hover:bg-action-primary-hover disabled:opacity-60\">\n"
+        f"            {{busy ? 'Saving…' : {_q(block.submit_label)}}}\n"
+        f"          </button>\n"
+        f"          {{message ? <StatusBadge tone={{message.tone}}>{{message.text}}</StatusBadge> : null}}\n"
+        f"        </div>\n"
+        f"      </form>\n"
+        f"    </Panel>\n"
+        f"  );\n"
+        f"}}\n"
+    )
+
+
+def form_blocks(spec: AppSpec) -> list[Block]:
+    """One form per entity at most (the first form block for that entity wins)."""
+    seen: set[str] = set()
+    out: list[Block] = []
+    for page in spec.pages:
+        stack = list(page.blocks)
+        while stack:
+            b = stack.pop(0)
+            if b.type == "form" and b.entity not in seen:
+                seen.add(b.entity)
+                out.append(b)
+            stack.extend(b.children)
+    return out
 
 
 def page_tsx(page: PageSpec, spec: AppSpec) -> str:
@@ -673,8 +821,10 @@ def fixed_paths(spec: AppSpec) -> list[str]:
     """Paths of the non-page files `compose` writes, in write order (known before the seed exists)."""
     from app.engines import api_kit
 
-    return ["app.spec.json", "src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts", "src/data/store.ts"] + sorted(
-        api_kit.api_files(spec, {n: [] for n in spec.entities})
+    return (
+        ["app.spec.json", "src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts", "src/data/store.ts"]
+        + [f"src/components/{b.entity}Form.tsx" for b in form_blocks(spec)]
+        + sorted(api_kit.api_files(spec, {n: [] for n in spec.entities}))
     )
 
 
@@ -689,6 +839,8 @@ def compose(spec: AppSpec, seed_rows: dict[str, list[dict[str, Any]]]) -> dict[s
         "src/data/seed.ts": seed_ts(spec, seed_rows),
         "src/data/store.ts": api_kit.app_store_ts(spec),
     }
+    for block in form_blocks(spec):
+        files[f"src/components/{block.entity}Form.tsx"] = form_tsx(block, spec)
     for page in spec.pages:
         files[f"src/pages/{page.component}.tsx"] = page_tsx(page, spec)
     files.update(api_kit.api_files(spec, seed_rows))

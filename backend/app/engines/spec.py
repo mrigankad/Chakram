@@ -29,7 +29,7 @@ _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _ENTITY = re.compile(r"^[A-Z][A-Za-z0-9]*$")
 _ICON = re.compile(r"^[A-Z][A-Za-z0-9]{1,40}$")
 _MARK = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
-BLOCK_TYPES = ("kpis", "chart", "table", "barlist", "list", "progress", "panel", "split", "grid", "custom")
+BLOCK_TYPES = ("kpis", "chart", "table", "barlist", "list", "progress", "panel", "split", "grid", "form", "custom")
 METRIC_FNS = ("count", "sum", "avg", "min", "max")
 CHART_KINDS = ("line", "area", "bar", "donut")
 FORMATS = ("number", "currency", "percent")
@@ -92,7 +92,7 @@ class Series(BaseModel):
 
 
 class Block(BaseModel):
-    type: Literal["kpis", "chart", "table", "barlist", "list", "progress", "panel", "split", "grid", "custom"]
+    type: Literal["kpis", "chart", "table", "barlist", "list", "progress", "panel", "split", "grid", "form", "custom"]
     title: str = ""
     # kpis
     items: list[KpiItem] = Field(default_factory=list)
@@ -117,6 +117,9 @@ class Block(BaseModel):
     # split / grid
     ratio: Literal["1.4/1", "1/1.4", "1.6/1", "1/2"] = "1.4/1"
     children: list["Block"] = Field(default_factory=list)
+    # form
+    fields: list[str] = Field(default_factory=list)
+    submit_label: str = ""
     # custom
     name: str = ""
     description: str = ""
@@ -429,6 +432,18 @@ def _parse_block(raw: Any, entities: dict[str, EntitySpec], problems: list[str],
         ratio = str(raw.get("ratio") or "1.4/1")
         return Block(type=btype, title=title, ratio=ratio if ratio in ("1.4/1", "1/1.4", "1.6/1", "1/2") else "1.4/1",
                      children=children[:2] if btype == "split" else children[:6])
+
+    if btype == "form":
+        entity_name = str(raw.get("entity") or "").strip()
+        if entity_name not in entities:
+            problems.append(f"form block on unknown entity '{entity_name}'")
+            return None
+        entity = entities[entity_name]
+        wanted = [f for f in (raw.get("fields") or []) if isinstance(f, str) and f in entity.fields and f != "id"]
+        if not wanted:
+            wanted = [n for n in entity.fields if n != "id"]
+        return Block(type="form", title=title or f"New {entity.label.lower()}", entity=entity_name, fields=wanted[:12],
+                     submit_label=str(raw.get("submit_label") or "").strip()[:30] or f"Add {entity.label.lower()}")
 
     if btype == "custom":
         name = str(raw.get("name") or "").strip()

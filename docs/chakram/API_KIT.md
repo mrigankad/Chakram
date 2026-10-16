@@ -17,7 +17,8 @@ api/
   src/routes.ts               per entity: GET list (?sort, dir, limit, offset, <field>=), GET one, POST, PUT, DELETE
   src/index.ts                the Hono app: /api/health, /api/ready, /api/auth/{signup,login,logout,me}, role change (owner)
   src/seed.ts + seed.json     loads the app's seed rows and an owner account into an empty store
-src/data/store.ts             useAppData() + typed `api.<collection>.create/update/remove`
+src/data/store.ts             useAppData() + typed `api.<collection>.create/update/remove` (in memory without VITE_API_URL)
+src/components/<Entity>Form.tsx   one per `form` block: a create form bound to `api`
 ```
 
 Rules the kit enforces, the same in every app:
@@ -47,6 +48,6 @@ Then `VITE_API_URL=http://localhost:3001 npm run dev` in the app. Pages show "Lo
 
 ## What is not in the kit yet
 
-- Create/edit forms in composed pages (`form` and `detail` blocks): the `api` client exists, the UI blocks do not.
+- A `detail` block (one row's fields with edit and delete). The `form` block exists: `{"type": "form", "entity": "Appointment", "fields": [...], "submit_label": "Book"}` composes `src/components/<Entity>Form.tsx` (controlled inputs by field kind, ref selects fed by the store, required checks, `api.<collection>.create`, inline success/error badge) with no model call; the spec-derived cases cover submit and empty submission.
 - File upload, background jobs, webhooks (blueprint BE 07–10).
 - A Vercel function wrapper (`@hono/vercel`); the README shows where it goes.

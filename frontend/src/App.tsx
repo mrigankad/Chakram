@@ -38,6 +38,8 @@ const RootCauseDetail = lazy(() => import("@/pages/RootCauseDetail"));
 const TestSelection = lazy(() => import("@/pages/TestSelection"));
 const SelfHealingTests = lazy(() => import("@/pages/SelfHealingTests"));
 const ConnectorsSettings = lazy(() => import("@/pages/ConnectorsSettings"));
+const Projects = lazy(() => import("@/pages/Projects"));
+const ProjectView = lazy(() => import("@/pages/ProjectView"));
 
 function RootRedirect() {
   const { isAuthenticated, loading } = useAuth();
@@ -69,6 +71,8 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/projects/:id" element={<ProjectView />} />
             <Route path="/requirements" element={<Requirements />} />
             <Route path="/synthetic-data" element={<SyntheticData />} />
             <Route path="/test-execution" element={<TestExecution />} />

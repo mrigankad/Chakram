@@ -3,6 +3,7 @@ import type { Column, StatusTone } from '../chronos';
 import { useAppData } from '../data/store';
 import type { Doctor } from '../data/types';
 import { latest, lookup, series, top } from '../data/queries';
+import AppointmentForm from '../components/AppointmentForm';
 import ShiftPlanner from '../components/ShiftPlanner';
 
 const appointmentStatusTone: Record<string, StatusTone> = { "scheduled": "info", "done": "success", "cancelled": "error" };
@@ -57,6 +58,7 @@ export default function Doctors() {
       <Panel title="Notes">
         <p className="text-body-md text-secondary">{"Seed data only; connect the API before go-live."}</p>
       </Panel>
+      <AppointmentForm />
       <ShiftPlanner />
     </PageBody>
   );

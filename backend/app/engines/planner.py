@@ -232,6 +232,7 @@ Block types:
 - table: entity, columns (field names), badge (an enum column), sort {field, dir}, search (default true), limit.
 - list: entity, primary (field), secondary (field), badge (enum field), limit — a compact recent-items list.
 - barlist / progress: entity, group (enum/ref/string field), metric, limit — ranked breakdown / completion bars.
+- form: entity, fields (subset of its field names), title, submit_label — a create form; put one on the page that lists that entity.
 - panel: title, text — a short static note.
 - split (exactly 2 children, ratio 1.4/1|1/1.4|1.6/1|1/2) and grid (2-6 children) lay out the blocks above; no nesting beyond one level.
 - custom: name (PascalCase), description — ONLY for something the kit cannot express (a calendar grid, a map, a wizard).

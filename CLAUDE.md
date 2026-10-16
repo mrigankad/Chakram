@@ -61,7 +61,7 @@ AIDLC-main/
 
 ## Frontend routes (src/App.tsx)
 
-`/dashboard` (default), `/requirements`, `/synthetic-data`, `/test-execution`,
+`/dashboard` (default), `/projects` and `/projects/:id` (project view), `/requirements`, `/synthetic-data`, `/test-execution`,
 `/prioritization`, `/live-testing` (`/live-test-runner` alias), `/code-review`,
 `/ci-intelligence`, `/defect-prediction`, `/generated-tests`, `/incidents`,
 `/monitoring`, `/release-gate`, `/requirements-intelligence`,
@@ -193,8 +193,9 @@ PID only. Do not touch Docker containers other than `aidlc-mongo`.
 - **API kit** (`docs/chakram/API_KIT.md`): composed apps also get `api/` (Hono + zod +
   PostgreSQL, org-scoped CRUD per entity, sessions and roles, SQL migrations, seed) from
   `engines/api_kit.py`, and `src/data/store.ts` (`useAppData()`: seed or live API via
-  `VITE_API_URL`). `npm run check:api-kit` type-checks the golden kit with its pinned
-  dependencies (CI).
+  `VITE_API_URL`; writes go to the API or stay in memory). `npm run check:api-kit`
+  type-checks the golden kit with its pinned dependencies (CI). A `form` block in the spec
+  composes `src/components/<Entity>Form.tsx` (inputs by field kind, `api.<collection>.create`).
 - **Test this app**: for a composed app, `POST /ai-ide/workspace/{id}/test-cases` derives
   acceptance cases from `app.spec.json` (`engines/spec_tests.py`, no model call) into one
   requirement per app, and the Deployed view opens Test Execution with that requirement and
@@ -221,6 +222,11 @@ PID only. Do not touch Docker containers other than `aidlc-mongo`.
   repository), updated by push (repo), deploy (deployments), Test this app (requirement) and
   the build (name, status, spec summary). `GET /projects/{id}` computes Build / Verify /
   Review / Release / Operate stage statuses from stored data; nothing is copied from runs.
+  `POST /projects/{id}/health` pings the deployed app's `/api/health` and `/api/ready` and
+  stores the result; `GET /projects/{id}/gate` scores the project's own latest run and health
+  (`INSUFFICIENT_DATA` without a run). The Projects page and the project view
+  (`frontend/src/pages/Projects.tsx`, `ProjectView.tsx`) read these; the Dashboard lists
+  the five most recent projects.
   See `docs/chakram/PRODUCT_DIRECTION.md` and ADR-6.
 - **Connectors** are declared once in `backend/app/services/connector_registry.py` (kind,
   secret fields, the features they feed, the pinned API version, a read-only check).

@@ -60,7 +60,8 @@ async def test_a_composed_run_writes_pages_without_the_model(db):
 
     files = workspace.files
     assert "export default function Overview()" in files["src/pages/Overview.tsx"]
-    assert "<ShiftPlanner />" in files["src/pages/Doctors.tsx"]
+    assert "<ShiftPlanner />" in files["src/pages/Doctors.tsx"] and "<AppointmentForm />" in files["src/pages/Doctors.tsx"]
+    assert "await api.appointments.create(data);" in files["src/components/AppointmentForm.tsx"]
     assert files["src/components/ShiftPlanner.tsx"] == PLANNER_COMPONENT.strip()
     assert '"name": "Clinic Appointments"' in files["app.spec.json"]
     assert "Dr Rao" in files["src/data/seed.ts"]
@@ -69,7 +70,7 @@ async def test_a_composed_run_writes_pages_without_the_model(db):
 
     done = sock.sent[-1]
     assert done["type"] == "GENERATION_DONE" and done["composed"] is True
-    assert done["files_failed"] == 0 and done["files_total"] == 20  # 17 fixed (data layer + API kit) + 1 custom + 2 pages
+    assert done["files_failed"] == 0 and done["files_total"] == 21  # 18 fixed (data layer, the form, API kit) + 1 custom + 2 pages
     assert "api/migrations/0001_init.sql" in workspace.files
     assert [m["path"] for m in sock.of_type("FILE_DONE")][-2:] == ["src/pages/Overview.tsx", "src/pages/Doctors.tsx"]
     assert sock.of_type("STREAM_TOKEN") and all(m["path"] == "src/components/ShiftPlanner.tsx" for m in sock.of_type("STREAM_TOKEN"))

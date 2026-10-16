@@ -29,6 +29,10 @@ def test_cases_cover_every_page_and_block_with_seeded_values():
     assert "Asha Verma" in table["expected"] and "Patient, Doctor, Start, Status, Fee, Paid" in table["expected"]
     assert any("searching Recent appointments narrows" in c["name"] for c in flat)
     assert any(c["name"].endswith("ShiftPlanner section renders") for c in flat)
+    create = next(c for c in flat if c["name"] == "Doctors: create an appointment with the Book appointment form")
+    assert 'press "Book"' in create["description"] and "saved" in create["expected"].lower()
+    reject = next(c for c in flat if "Book appointment form rejects an empty submission" in c["name"])
+    assert reject["category"] == "edge"
     assert cases["edge"] and all(c["severity"] in ("Critical", "High", "Medium", "Low") for c in flat)
     assert sorted(c["tc_id"] for c in flat) == [f"TC-{i:03d}" for i in range(1, len(flat) + 1)]  # unique, gap-free ids
     assert all(c["expected"].strip() and c["name"].strip() for c in flat)

@@ -114,3 +114,17 @@ Checks: backend 674 passed / 1 skipped; frontend tsc clean, 527 vitest passed, b
 **Not done**: the project view UI (Pipeline page reading the record; Dashboard listing projects) and the Operate health ping; both are slice 3 (T-120).
 
 **Next task:** T-120 (project view), then T-130 (write paths in composed apps).
+
+## 2026-10-16 — Project view and the first write path (T-120 done, T-130 partial)
+
+Checks: backend 677 passed / 1 skipped; frontend tsc clean, 537 vitest passed, build passed; `npm run check:composed` and `npm run check:api-kit` pass.
+
+- **Project view** (`/projects`, `/projects/:id`): every app Chakram builds or imports, with its five stages. Build links to App Studio, Verify shows the latest run (passed/failed/skipped/pass rate) and opens Test Execution with the requirement and deployed URL, Review links the repository and Code Review, Release shows the last deployment, Operate has **Check health**. Import repository registers a GitHub repo as a project. The Dashboard lists the five most recent projects; App Studio's Deployed view links to the project.
+- **Operate** (`POST /projects/{id}/health`): pings the deployed app's `/api/health` and `/api/ready` (every API kit has them); a frontend-only deployment is reported as reachable without an API; failures are stored on the project with the message.
+- **Project gate** (`GET /projects/{id}/gate`): scores only what the project measured (its latest run's pass rate, deployment state, last health check); `INSUFFICIENT_DATA` without a run, `CAUTION` when health failed or was never checked, `NO_GO` under the pass-rate threshold. No LLM involved; the Jira-fed Release Gate page is unchanged.
+- **Form block** (`{"type": "form", "entity": …, "fields": […]}`): composed apps get `src/components/<Entity>Form.tsx` with no model call: inputs by field kind (enum and ref selects fed by the store, date/datetime, number, checkbox, textarea), required checks, `api.<collection>.create`, an inline saved/error badge. `src/data/store.ts` writes go to the API when `VITE_API_URL` is set and stay in memory otherwise, so the Live preview and the deployed app behave the same. Spec-derived test cases cover the submit and the empty submission. The planner's vocabulary includes `form`; the golden app has one and type-checks against the kit.
+- Fixed on the way: the form template emitted `{formId}` without `$` and a stray `}` after the data object; enum values are cast to the entity's union type so the composed file type-checks.
+
+**Not done**: a `detail` block (edit/delete one row), a live PostgreSQL run of the blueprint's BE 01–04 checks, and the Pipeline page still shows the old demo stages (the project view supersedes it; retire or redirect it in the cleanup slice).
+
+**Next task:** T-030 (Chakram adopts the kit tokens and the org's pack) or T-140 (Jira narrowed to story import and write-back; Sprint Health retired).

@@ -52,6 +52,7 @@ SPEC = {
             {"type": "chart", "kind": "bar", "title": "Revenue by doctor", "series": [{"label": "Revenue", "metric": "sum(Appointment.fee)"}], "group": "doctor", "format": "currency"},
             {"type": "table", "entity": "Doctor"},
             {"type": "panel", "title": "Notes", "text": "Seed data only; connect the API before go-live."},
+            {"type": "form", "title": "Book appointment", "entity": "Appointment", "fields": ["patient", "doctor", "start", "status", "fee", "notes", "paid"], "submit_label": "Book"},
             {"type": "custom", "name": "ShiftPlanner", "description": "A week grid of doctor shifts with a toggle per slot."},
         ]},
     ],
@@ -94,7 +95,7 @@ def test_every_composed_file_passes_the_structural_check():
         result = verify_file(path, content, kit_exports=set(kit.kit_exports()), workspace_files=known, planned_files=set(files))
         assert result.ok, f"{path}: {result.problems}"
     assert {p for p in files if not p.startswith("api/")} == {
-        "app.spec.json", "src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts", "src/data/store.ts", "src/pages/Overview.tsx", "src/pages/Doctors.tsx"}
+        "app.spec.json", "src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts", "src/data/store.ts", "src/components/AppointmentForm.tsx", "src/pages/Overview.tsx", "src/pages/Doctors.tsx"}
     assert {p for p in files if p.startswith("api/")} == {
         "api/package.json", "api/tsconfig.json", "api/.env.example", "api/README.md", "api/migrations/0001_init.sql", "api/src/schema.ts",
         "api/src/store.ts", "api/src/auth.ts", "api/src/routes.ts", "api/src/index.ts", "api/src/seed.ts", "api/src/seed.json"}
@@ -129,8 +130,29 @@ def test_api_kit_follows_the_entities():
     assert "import seed from './seed.json'" in files["api/src/seed.ts"]
     store = files["src/data/store.ts"]
     assert "request<{ rows: Appointment[] }>('/api/appointments?limit=500')" in store
-    assert "create: (data: Omit<Doctor, 'id'>) => request<Doctor>('/api/doctors'" in store
+    assert 'doctors: writer<Doctor>("Doctor", "doctors"),' in store and "create: async (data: Omit<T, 'id'>): Promise<T>" in store
+    assert "const row = await request<T>(`/api/${collection}`, { method: 'POST'" in store  # the API when VITE_API_URL is set
+    assert "put([row, ...list()]);" in store  # in memory otherwise
     assert '"name": "clinic-appointments-api"' in files["api/package.json"]
+
+
+def test_form_block_composes_a_create_form_bound_to_the_store():
+    spec, _rows, _w, files = _compose()
+    doctors = files["src/pages/Doctors.tsx"]
+    assert "<AppointmentForm />" in doctors and "import AppointmentForm from '../components/AppointmentForm';" in doctors
+    form = files["src/components/AppointmentForm.tsx"]
+    assert "export default function AppointmentForm()" in form
+    assert "const { ready, doctors } = useAppData();" in form  # the ref select needs the doctors
+    assert "id={`${formId}-patient`}" in form and "}};" not in form
+    assert "{doctors.map((r) => <option key={r.id} value={r.id}>{String(r.name)}</option>)}" in form
+    assert '<option value="scheduled">scheduled</option>' in form
+    assert 'type="datetime-local"' in form and 'type="checkbox"' in form and "<textarea" in form
+    assert "const data: Omit<Appointment, 'id'> = {" in form and "satisfaction: 0," in form  # hidden fields get a default
+    assert "await api.appointments.create(data);" in form
+    assert "{busy ? 'Saving…' : \"Book\"}" in form
+    assert "const missing = [\"patient\", \"doctor\", \"start\"]" in form
+    assert [b.entity for b in composer.form_blocks(spec)] == ["Appointment"]
+    assert "src/components/AppointmentForm.tsx" in composer.fixed_paths(spec)
 
 
 def test_custom_block_spec_tells_the_model_what_data_exists():

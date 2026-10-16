@@ -121,6 +121,116 @@ export interface DesignPackList {
 
 export const DESIGN_PACKS_QUERY_KEY = ["design-packs"] as const;
 
+// ─── Projects (one app = one project; docs/chakram/PRODUCT_DIRECTION.md section 1) ───
+
+export const PROJECTS_QUERY_KEY = ["projects"] as const;
+
+/** A deployment the project knows about (Vercel), newest first in `Project.deployments`. */
+export interface ProjectDeployment {
+  id: string;
+  url: string | null;
+  /** Vercel state lower-cased: "queued", "building", "ready", "error", … */
+  state: string;
+  target: string | null;
+  branch: string | null;
+  created_at: string;
+}
+
+/** Result of probing the deployed app's health and ready endpoints (POST /projects/{id}/health). */
+export interface ProjectHealth {
+  url: string | null;
+  ok: boolean;
+  /** HTTP status of /api/health, null when it was not reached. */
+  health: number | null;
+  /** HTTP status of /api/ready, null when it was not reached. */
+  ready: number | null;
+  message: string;
+  checked_at: string;
+}
+
+/** A test execution run of the project's requirement, as the project record summarises it. */
+export interface ProjectRun {
+  run_id: string;
+  status: string;
+  target_url: string;
+  passed: number;
+  failed: number;
+  skipped: number;
+  pass_rate: number | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+/** One of the five stages GET /projects/{id} computes from stored data. */
+export interface ProjectStage {
+  /** "not evaluated", "n/a", "created", "generating", "done", "error", "running", "passed", "failed", "ready", or a deployment state. */
+  status: string;
+  detail?: string;
+  run?: ProjectRun | null;
+  repo?: ProjectRepo | null;
+  deployment?: ProjectDeployment | null;
+  url?: string | null;
+  spec?: ProjectSpecSummary | null;
+}
+
+export interface ProjectRepo {
+  url: string;
+  owner: string;
+  name: string;
+  default_branch: string;
+}
+
+export interface ProjectSpecSummary {
+  entities: string[];
+  pages: string[];
+}
+
+export type ProjectSource = "app_studio" | "repo";
+
+export interface Project {
+  id: string;
+  name: string;
+  source: ProjectSource;
+  workspace_id: string | null;
+  pack_id: string | null;
+  spec: ProjectSpecSummary | null;
+  repo: ProjectRepo | null;
+  deployments: ProjectDeployment[];
+  last_deployment: ProjectDeployment | null;
+  last_health: ProjectHealth | null;
+  requirement_id: string | null;
+  build_status: string | null;
+  latest_run: ProjectRun | null;
+  stages: {
+    build: ProjectStage;
+    verify: ProjectStage;
+    review: ProjectStage;
+    release: ProjectStage;
+    operate: ProjectStage;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProjectGateVerdict = "GO" | "CAUTION" | "NO_GO" | "INSUFFICIENT_DATA";
+
+/** Release gate scored on the project's own test results (GET /projects/{id}/gate). */
+export interface ProjectGate {
+  verdict: ProjectGateVerdict;
+  reason: string;
+  score: number | null;
+  signals: Record<string, unknown>;
+  /** Signal name → why it could not be measured. */
+  not_evaluated: Record<string, string>;
+  evaluated_at: string;
+}
+
+export interface ImportProjectRequest {
+  repo_url: string;
+  name?: string;
+  default_branch?: string;
+}
+
 export interface Requirement {
   id: string;
   text: string;
@@ -1482,6 +1592,20 @@ export const api = {
       .then((r) => r.data),
   deleteDesignPack: (id: string) =>
     apiClient.delete<{ ok: boolean }>(`/ai-ide/design-packs/${encodeURIComponent(id)}`).then((r) => r.data),
+
+  // ── Projects ──
+  listProjects: () =>
+    apiClient.get<{ projects: Project[] }>("/projects").then((r) => r.data.projects),
+  getProject: (id: string) =>
+    apiClient.get<Project>(`/projects/${encodeURIComponent(id)}`).then((r) => r.data),
+  /** Creates a project from a GitHub repository URL; a 400 carries the reason for a URL that is not one. */
+  importProject: (body: ImportProjectRequest) =>
+    apiClient.post<Project>("/projects/import", body).then((r) => r.data),
+  /** Probes the last deployment's health and ready endpoints and stores the result on the project. */
+  checkProjectHealth: (id: string) =>
+    apiClient.post<ProjectHealth>(`/projects/${encodeURIComponent(id)}/health`).then((r) => r.data),
+  getProjectGate: (id: string) =>
+    apiClient.get<ProjectGate>(`/projects/${encodeURIComponent(id)}/gate`).then((r) => r.data),
 
   // ── Org connectors (reconfigurable secrets) ──
   getConnectors: () =>

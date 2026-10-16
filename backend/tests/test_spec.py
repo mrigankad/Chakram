@@ -75,6 +75,18 @@ def test_split_needs_two_children_and_nesting_is_one_level():
     assert [c.type for c in blocks[1].children] == ["table", "panel"]
 
 
+def test_form_blocks_name_the_entity_and_default_to_all_its_fields():
+    spec = normalize_spec(_spec(pages=[{"title": "Book", "blocks": [
+        {"type": "form", "entity": "Appointment", "fields": ["patient", "nope", "id", "doctor"], "submit_label": "Book it"},
+        {"type": "form", "entity": "Doctor"},
+        {"type": "form", "entity": "Ghost"},
+    ]}]))
+    forms = [b for b in spec.pages[0].blocks if b.type == "form"]
+    assert [f.entity for f in forms] == ["Appointment", "Doctor"]  # the unknown entity is dropped
+    assert forms[0].fields == ["patient", "doctor"] and forms[0].submit_label == "Book it" and forms[0].title == "New appointment"
+    assert forms[1].fields == ["name", "speciality", "email"] and forms[1].submit_label == "Add doctor"
+
+
 def test_custom_blocks_get_unique_component_names():
     raw = _spec(pages=[
         {"title": "A", "blocks": [{"type": "custom", "name": "Planner", "description": "x"}]},

@@ -112,6 +112,7 @@ export function isMarkId(id: string): id is MarkId {
 export const PAGE_MARKS: Partial<Record<string, MarkId>> = {
   "/dashboard": "mark-dashboard",
   "/pipeline": "mark-pipeline",
+  "/projects": "mark-pipeline",
   "/ai-ide": "mark-ai-app-builder",
   "/workspace": "mark-ai-workspace",
   "/code-review": "mark-code-review",

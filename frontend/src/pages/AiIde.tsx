@@ -38,7 +38,7 @@ import { AiIdeProvider, pendingPreviewFiles, useAiIde } from "@/context/AiIdeCon
 import { AiFileTree } from "@/components/ai-ide/AiFileTree";
 import { AiCodeEditor } from "@/components/ai-ide/AiCodeEditor";
 import { useAiGenerationWS } from "@/hooks/useAiGenerationWS";
-import { DESIGN_PACKS_QUERY_KEY, api, apiClient } from "@/lib/api";
+import { DESIGN_PACKS_QUERY_KEY, PROJECTS_QUERY_KEY, api, apiClient } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AiIdePreview } from "@/components/ai-ide/AiIdePreview";
@@ -49,7 +49,7 @@ import { applyTextEdit, findOpeningTag, readClassName, setClassName } from "@/li
 import { downloadWorkspaceZip } from "@/lib/ai-ide-download";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { apiErrorMessage } from "@/lib/api-error";
 import { useAskDialog } from "@/components/ui/ask-dialog";
 
@@ -1048,9 +1048,12 @@ function RightRail({
 
 type CenterView = "editor" | "split" | "preview";
 
-function IdeLayout({ idea, restored }: { idea: string; restored: boolean }) {
+function IdeLayout({ idea, restored, projectId: knownProjectId }: { idea: string; restored: boolean; projectId: string | null }) {
   const { state, setActiveFile } = useAiIde();
   const { workspaceId, status, statusMessage, failedFiles, files } = state;
+  // The project record this app belongs to: known from the create call, or found by workspace for a restored app.
+  const projects = useQuery({ queryKey: PROJECTS_QUERY_KEY, queryFn: api.listProjects, enabled: !knownProjectId && !!workspaceId });
+  const projectId = knownProjectId ?? projects.data?.find((p) => p.workspace_id === workspaceId)?.id ?? null;
   const [previewMode, setPreviewMode] = useState<"local" | "vercel">("local");
   const isMobile = useIsMobile();
   const { startGeneration, attachToRun } = useAiGenerationWS(workspaceId);
@@ -1541,6 +1544,16 @@ function IdeLayout({ idea, restored }: { idea: string; restored: boolean }) {
                           {creatingTests ? "Preparing tests…" : "Test this app"}
                         </Button>
                       )}
+                      {projectId && (
+                        <Link
+                          to={`/projects/${encodeURIComponent(projectId)}`}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-ink-secondary hover:text-ink hover:underline"
+                          title="Build, Verify, Review, Release and Operate for this app"
+                        >
+                          Open project
+                          <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />
+                        </Link>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1791,6 +1804,8 @@ function AiIdeInner() {
   const [restored, setRestored] = useState(false);
   const [restoring, setRestoring] = useState(true);
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
+  // Project record created with the workspace (POST /ai-ide/workspace/create returns `project_id`).
+  const [projectId, setProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1831,13 +1846,15 @@ function AiIdeInner() {
     setRestoreNotice(null);
     setRestored(false);
     setCurrentIdea(idea);
+    setProjectId(null);
     try {
       // Without a pack the server installs the organization's default design pack.
-      const res = await apiClient.post<{ workspace_id: string; file_paths: string[]; pack_id?: string }>(
+      const res = await apiClient.post<{ workspace_id: string; file_paths: string[]; pack_id?: string; project_id?: string }>(
         "/ai-ide/workspace/create",
         packId ? { pack_id: packId } : undefined,
       );
       const { workspace_id, file_paths } = res.data;
+      setProjectId(res.data.project_id ?? null);
       const filesRes = await apiClient.get<Record<string, string>>(`/ai-ide/workspace/${workspace_id}/files`);
 
       const initialFiles: Record<string, string> = { ...filesRes.data };
@@ -1868,6 +1885,7 @@ function AiIdeInner() {
 
   const openApp = async (app: { workspace_id: string; idea: string | null; name: string | null }) => {
     setRestoreNotice(null);
+    setProjectId(null);
     try {
       const filesRes = await apiClient.get<Record<string, string>>(`/ai-ide/workspace/${app.workspace_id}/files`);
       const idea = app.idea || app.name || "Saved app";
@@ -1887,7 +1905,7 @@ function AiIdeInner() {
     return <IdeaScreen onBuild={handleBuild} onOpenApp={(app) => void openApp(app)} notice={restoreNotice} />;
   }
 
-  return <IdeLayout idea={currentIdea} restored={restored} />;
+  return <IdeLayout idea={currentIdea} restored={restored} projectId={projectId} />;
 }
 
 // ── Export ────────────────────────────────────────────────────────────────────

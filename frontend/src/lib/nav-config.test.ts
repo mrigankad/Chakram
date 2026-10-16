@@ -10,6 +10,7 @@ import {
   getBreadcrumbs,
   hiddenPageMeta,
   platformSections,
+  projectsItem,
   testSuiteItem,
   testSuiteTabs,
   visibleSections,
@@ -109,6 +110,19 @@ describe("breadcrumbs for hidden pages", () => {
     ]);
   });
 
+  it("files the project list and the project view under Projects", () => {
+    expect(findNavItemForPath("/projects")).toBe(projectsItem);
+    expect(findNavItemForPath("/projects/abc123")).toBe(projectsItem);
+    expect(findSectionForPath("/projects/abc123")).toBeNull();
+    expect(getBreadcrumbForPath("/projects/abc123")).toEqual({ section: "Projects", page: "Projects" });
+    expect(getBreadcrumbs("/projects/abc123")).toEqual([
+      { label: "Projects" },
+      { label: "Projects", href: "/projects" },
+      { label: "Project" },
+    ]);
+    expect(allNavItems.indexOf(projectsItem)).toBe(1);
+  });
+
   it("describes footer pages and falls back for unknown paths", () => {
     expect(getBreadcrumbForPath("/cost-tracker")).toEqual({ section: "Admin", page: "Usage & Cost" });
     expect(getBreadcrumbForPath("/profile")).toEqual({ section: "Account", page: "Profile" });
@@ -149,7 +163,7 @@ describe("allSearchablePages", () => {
     expect(new Set(seen).size).toBe(seen.length);
     for (const url of Object.keys(hiddenPageMeta)) expect(seen).toContain(url);
     for (const url of PARKED) expect(seen).toContain(url);
-    for (const url of ["/dashboard", "/pipeline", "/cost-tracker", "/profile", "/settings/connectors"]) {
+    for (const url of ["/dashboard", "/projects", "/pipeline", "/cost-tracker", "/profile", "/settings/connectors"]) {
       expect(seen).toContain(url);
     }
     expect(pages.find((p) => p.url === "/repo-baseline")?.section).toBe("Testing & Quality");

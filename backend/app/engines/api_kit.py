@@ -845,16 +845,54 @@ def app_store_ts(spec: AppSpec) -> str:
         "  );",
         "}",
         "",
-        "/** Typed writes against the API (no-ops that throw when the app runs on the seed). */",
+        "let localSeq = 0;",
+        "function localId(prefix: string): string {",
+        "  localSeq += 1;",
+        "  return `${prefix}-local-${Date.now().toString(36)}-${localSeq}`;",
+        "}",
+        "",
+        "/** Writes. Against the API when VITE_API_URL is set; otherwise in memory (lost on reload, like the seed). */",
+        "function writer<T extends { id: string }>(key: keyof typeof collections, collection: string) {",
+        "  const list = () => (state as unknown as Record<string, T[]>)[collection];",
+        "  const put = (rows: T[]) => setState({ ...state, [collection]: rows });",
+        "  return {",
+        "    create: async (data: Omit<T, 'id'>): Promise<T> => {",
+        "      if (API_URL) {",
+        "        const row = await request<T>(`/api/${collection}`, { method: 'POST', body: JSON.stringify(data) });",
+        "        await reload();",
+        "        return row;",
+        "      }",
+        "      const row = { ...data, id: localId(String(key).toLowerCase()) } as T;",
+        "      put([row, ...list()]);",
+        "      return row;",
+        "    },",
+        "    update: async (id: string, data: Partial<Omit<T, 'id'>>): Promise<T> => {",
+        "      if (API_URL) {",
+        "        const row = await request<T>(`/api/${collection}/${id}`, { method: 'PUT', body: JSON.stringify(data) });",
+        "        await reload();",
+        "        return row;",
+        "      }",
+        "      const rows = list().map((r) => (r.id === id ? ({ ...r, ...data } as T) : r));",
+        "      put(rows);",
+        "      const row = rows.find((r) => r.id === id);",
+        "      if (!row) throw new Error(`${String(key)} ${id} not found`);",
+        "      return row;",
+        "    },",
+        "    remove: async (id: string): Promise<void> => {",
+        "      if (API_URL) {",
+        "        await request<void>(`/api/${collection}/${id}`, { method: 'DELETE' });",
+        "        await reload();",
+        "        return;",
+        "      }",
+        "      put(list().filter((r) => r.id !== id));",
+        "    },",
+        "  };",
+        "}",
+        "",
         "export const api = {",
     ]
     for n in names:
-        c = cols[n]
-        out.append(f"  {c}: {{")
-        out.append(f"    create: (data: Omit<{n}, 'id'>) => request<{n}>('/api/{c}', {{ method: 'POST', body: JSON.stringify(data) }}).then(async (row) => {{ await reload(); return row; }}),")
-        out.append(f"    update: (id: string, data: Partial<Omit<{n}, 'id'>>) => request<{n}>(`/api/{c}/${{id}}`, {{ method: 'PUT', body: JSON.stringify(data) }}).then(async (row) => {{ await reload(); return row; }}),")
-        out.append(f"    remove: (id: string) => request<void>(`/api/{c}/${{id}}`, {{ method: 'DELETE' }}).then(reload),")
-        out.append("  },")
+        out.append(f"  {cols[n]}: writer<{n}>({json.dumps(n)}, {json.dumps(cols[n])}),")
     out += ["};", "", "export const collectionNames = collections;", ""]
     return "\n".join(out)
 

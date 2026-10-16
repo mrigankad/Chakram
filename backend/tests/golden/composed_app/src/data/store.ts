@@ -78,18 +78,53 @@ export function useAppData(): AppData {
   );
 }
 
-/** Typed writes against the API (no-ops that throw when the app runs on the seed). */
+let localSeq = 0;
+function localId(prefix: string): string {
+  localSeq += 1;
+  return `${prefix}-local-${Date.now().toString(36)}-${localSeq}`;
+}
+
+/** Writes. Against the API when VITE_API_URL is set; otherwise in memory (lost on reload, like the seed). */
+function writer<T extends { id: string }>(key: keyof typeof collections, collection: string) {
+  const list = () => (state as unknown as Record<string, T[]>)[collection];
+  const put = (rows: T[]) => setState({ ...state, [collection]: rows });
+  return {
+    create: async (data: Omit<T, 'id'>): Promise<T> => {
+      if (API_URL) {
+        const row = await request<T>(`/api/${collection}`, { method: 'POST', body: JSON.stringify(data) });
+        await reload();
+        return row;
+      }
+      const row = { ...data, id: localId(String(key).toLowerCase()) } as T;
+      put([row, ...list()]);
+      return row;
+    },
+    update: async (id: string, data: Partial<Omit<T, 'id'>>): Promise<T> => {
+      if (API_URL) {
+        const row = await request<T>(`/api/${collection}/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+        await reload();
+        return row;
+      }
+      const rows = list().map((r) => (r.id === id ? ({ ...r, ...data } as T) : r));
+      put(rows);
+      const row = rows.find((r) => r.id === id);
+      if (!row) throw new Error(`${String(key)} ${id} not found`);
+      return row;
+    },
+    remove: async (id: string): Promise<void> => {
+      if (API_URL) {
+        await request<void>(`/api/${collection}/${id}`, { method: 'DELETE' });
+        await reload();
+        return;
+      }
+      put(list().filter((r) => r.id !== id));
+    },
+  };
+}
+
 export const api = {
-  doctors: {
-    create: (data: Omit<Doctor, 'id'>) => request<Doctor>('/api/doctors', { method: 'POST', body: JSON.stringify(data) }).then(async (row) => { await reload(); return row; }),
-    update: (id: string, data: Partial<Omit<Doctor, 'id'>>) => request<Doctor>(`/api/doctors/${id}`, { method: 'PUT', body: JSON.stringify(data) }).then(async (row) => { await reload(); return row; }),
-    remove: (id: string) => request<void>(`/api/doctors/${id}`, { method: 'DELETE' }).then(reload),
-  },
-  appointments: {
-    create: (data: Omit<Appointment, 'id'>) => request<Appointment>('/api/appointments', { method: 'POST', body: JSON.stringify(data) }).then(async (row) => { await reload(); return row; }),
-    update: (id: string, data: Partial<Omit<Appointment, 'id'>>) => request<Appointment>(`/api/appointments/${id}`, { method: 'PUT', body: JSON.stringify(data) }).then(async (row) => { await reload(); return row; }),
-    remove: (id: string) => request<void>(`/api/appointments/${id}`, { method: 'DELETE' }).then(reload),
-  },
+  doctors: writer<Doctor>("Doctor", "doctors"),
+  appointments: writer<Appointment>("Appointment", "appointments"),
 };
 
 export const collectionNames = collections;

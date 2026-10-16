@@ -12,6 +12,7 @@ import {
   FileText,
   Filter,
   FolderCode,
+  FolderKanban,
   GitCompare,
   Layers,
   LayoutGrid,
@@ -65,6 +66,14 @@ export const dashboardItem: NavItem = {
   title: "Dashboard",
   url: "/dashboard",
   icon: LayoutGrid,
+};
+
+/** Every app Chakram builds or imports; `/projects/<id>` is the project view. */
+export const projectsItem: NavItem = {
+  title: "Projects",
+  url: "/projects",
+  icon: FolderKanban,
+  hint: "Every app, build to operate",
 };
 
 export const pipelineItem: NavItem = {
@@ -250,6 +259,7 @@ const extraPageMeta: Record<string, PageMeta> = {
 /** Every sidebar item, parked ones included. */
 export const allNavItems: NavItem[] = [
   dashboardItem,
+  projectsItem,
   pipelineItem,
   ...platformSections.flatMap((s) => s.items),
 ];
@@ -261,6 +271,7 @@ export const allNavItems: NavItem[] = [
 export function allSearchablePages(): PageMeta[] {
   const rows: PageMeta[] = [
     { ...dashboardItem, section: "Overview", hint: "Platform overview" },
+    { ...projectsItem, section: "Projects" },
     { ...pipelineItem, section: "Pipeline" },
   ];
   for (const section of platformSections) {
@@ -312,6 +323,7 @@ export function findPageForPath(pathname: string): PageMeta | null {
   const hidden = Object.values(hiddenPageMeta).find((page) => matchesPath(page.url, pathname));
   if (hidden) return hidden;
   if (matchesPath(dashboardItem.url, pathname)) return { ...dashboardItem, section: "Overview" };
+  if (matchesPath(projectsItem.url, pathname)) return { ...projectsItem, section: "Projects" };
   if (matchesPath(pipelineItem.url, pathname)) return { ...pipelineItem, section: "Pipeline" };
   for (const section of platformSections) {
     const item = section.items.find((candidate) => matchesPath(candidate.url, pathname));
@@ -351,6 +363,7 @@ export type Crumb = { label: string; href?: string };
 /** Names for the segment after a page's own URL, e.g. /root-cause/<id>. */
 const detailLabels: Record<string, string> = {
   "/root-cause": "Analysis",
+  "/projects": "Project",
 };
 
 /**

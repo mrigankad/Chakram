@@ -16,6 +16,7 @@ import {
   findNavItemForPath,
   findSectionForPath,
   pipelineItem,
+  projectsItem,
   platformSections,
   visibleSections,
   type NavIcon,
@@ -348,7 +349,7 @@ export function AppSidebar({
         className={cn("min-h-0 flex-1 py-3", pad, expanded ? "overflow-y-auto overflow-x-hidden" : "overflow-visible")}
       >
         <ul className="flex flex-col gap-1.5">
-          {[dashboardItem, pipelineItem].map((item) => (
+          {[dashboardItem, projectsItem, pipelineItem].map((item) => (
             <li key={item.url}>
               <RailItem
                 icon={item.icon}
