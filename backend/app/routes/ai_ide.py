@@ -14,7 +14,7 @@ from app.config import settings
 from app.auth.dependencies import get_current_org
 from app.database import get_db
 from app.models.organization import OrganizationOut
-from app.services import ai_ide_generation
+from app.services import ai_ide_generation, run_store
 from app.services import ai_ide_service
 from app.services import ai_service
 from app.services import connector_settings_service as connectors
@@ -260,6 +260,63 @@ async def delete_design_pack(pack_id: str, org: OrganizationOut = Depends(get_cu
     if not await design_pack_service.delete_org_pack(db, org.id, pack_id):
         raise HTTPException(status_code=404, detail=f"No design pack '{pack_id}' for this organization.")
     return {"ok": True}
+
+
+# ── Runs: durable record of every build (run_store) ───────────────────────────
+
+@router.get("/workspace/{workspace_id}/runs", dependencies=[Depends(_attach_workspace)])
+async def list_workspace_runs(workspace_id: str, org: OrganizationOut = Depends(get_current_org), db=Depends(get_db)):
+    """The workspace's builds, newest first, with what each one finished."""
+    _require_org_workspace(org, workspace_id)
+    rows = []
+    for run in await run_store.list_for_workspace(db, org.id, workspace_id):
+        rows.append(run_store.public(run, run_store.progress(await run_store.events(db, run["run_id"]))))
+    return {"runs": rows}
+
+
+@router.get("/runs/{run_id}")
+async def get_run(run_id: str, after: int = 0, org: OrganizationOut = Depends(get_current_org), db=Depends(get_db)):
+    """One run and its stored events after `after` (a sequence number), oldest first."""
+    run = await run_store.get(db, org.id, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    events = await run_store.events(db, run_id, after_seq=after)
+    return {**run_store.public(run, run_store.progress(await run_store.events(db, run_id))), "events": events}
+
+
+@router.post("/workspace/{workspace_id}/cancel", dependencies=[Depends(_attach_workspace)])
+async def cancel_workspace_run(workspace_id: str, org: OrganizationOut = Depends(get_current_org), db=Depends(get_db)):
+    """Stop the build going for this workspace: at once in this process, through the store for any other."""
+    _require_org_workspace(org, workspace_id)
+    local = ai_ide_generation.cancel(workspace_id)
+    latest = await run_store.latest_for_workspace(db, org.id, workspace_id)
+    flagged = await run_store.request_cancel(db, org.id, latest["run_id"]) if latest and latest["status"] == "running" else None
+    if local is None and flagged is None:
+        raise HTTPException(status_code=409, detail="No build is running for this workspace.")
+    return {"cancelled": True, "run_id": (local.run_id if local else flagged["run_id"]), "immediate": local is not None}
+
+
+@router.post("/runs/{run_id}/resume")
+async def resume_run(run_id: str, org: OrganizationOut = Depends(get_current_org), db=Depends(get_db)):
+    """Continue an interrupted, cancelled or failed build from its stored plan; files already written are kept."""
+    prior = await run_store.get(db, org.id, run_id)
+    if prior is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if prior["status"] == "running":
+        raise HTTPException(status_code=409, detail="That build is still running.")
+    if not prior.get("plan"):
+        raise HTTPException(status_code=409, detail="That build stopped before a plan was made; start it again instead.")
+    workspace_id = prior["workspace_id"]
+    try:
+        await ai_ide_service.attach(db, org.id, workspace_id)
+        _require_org_workspace(org, workspace_id)
+    except WorkspaceExpiredError as exc:
+        raise HTTPException(status_code=410, detail=str(exc)) from exc
+    going = ai_ide_generation.get(workspace_id)
+    if going is not None and not going.finished:
+        raise HTTPException(status_code=409, detail="A build is already running for this workspace.")
+    run = ai_ide_generation.start(workspace_id, org.id, prior.get("idea") or "", db=db, resume_of=run_id)
+    return {"run_id": run.run_id, "workspace_id": workspace_id, "resume_of": run_id}
 
 
 @router.get("/workspace/{workspace_id}/files", dependencies=[Depends(_attach_workspace)])
@@ -578,6 +635,15 @@ async def generate(ws: WebSocket, workspace_id: str):
         run = ai_ide_generation.get(workspace_id)
         if attach_request:
             if run is None:
+                # Not in this process: the store knows whether a build was cut off.
+                latest = await run_store.latest_for_workspace(db, org_id, workspace_id)
+                if latest is not None and latest["status"] in ("interrupted", "cancelled"):
+                    prog = run_store.progress(await run_store.events(db, latest["run_id"]))
+                    await ws.send_json({
+                        "type": "RUN_INTERRUPTED",
+                        **run_store.public(latest, prog),
+                        "message": latest.get("error") or "The build was interrupted.",
+                    })
                 await ws.send_json({"type": "NO_RUN"})
                 return
         else:
@@ -589,7 +655,7 @@ async def generate(ws: WebSocket, workspace_id: str):
                 # A reload while the app was being built: follow the run already going.
                 await ws.send_json({"type": "STATUS", "message": "Reconnected to the generation already running"})
             else:
-                run = ai_ide_generation.start(workspace_id, org_id, idea)
+                run = ai_ide_generation.start(workspace_id, org_id, idea, db=db)
 
         queue = run.subscribe()
         while True:

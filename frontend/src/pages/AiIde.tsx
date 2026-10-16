@@ -1,30 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { StatusBadge, type StatusTone } from "@/components/imcc/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
-import {
-  Loader2,
-  RefreshCw,
-  Terminal,
-  Bot,
-  User,
-  FolderTree,
-  GitBranch,
-  Search,
-  Send,
-  Github,
-  Rocket,
-  Upload,
-  X,
-  Globe,
-  ExternalLink,
-  ServerCrash,
-  Columns2,
-  Code2,
-  Eye,
-  Download,
-  MessageSquare,
-  Palette,
-} from "lucide-react";
+import { Bot, Code2, Columns2, Download, ExternalLink, Eye, FolderTree, GitBranch, Github, Globe, Loader2, MessageSquare, Palette, Play, RefreshCw, Rocket, Search, Send, ServerCrash, Square, Terminal, Upload, User, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -39,7 +16,7 @@ import { AiFileTree } from "@/components/ai-ide/AiFileTree";
 import { AiCodeEditor } from "@/components/ai-ide/AiCodeEditor";
 import { useAiGenerationWS } from "@/hooks/useAiGenerationWS";
 import { DESIGN_PACKS_QUERY_KEY, PROJECTS_QUERY_KEY, api, apiClient } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AiIdePreview } from "@/components/ai-ide/AiIdePreview";
 import { DesignPanel, type SelectedElement } from "@/components/ai-ide/DesignPanel";
@@ -1049,7 +1026,7 @@ function RightRail({
 type CenterView = "editor" | "split" | "preview";
 
 function IdeLayout({ idea, restored, projectId: knownProjectId }: { idea: string; restored: boolean; projectId: string | null }) {
-  const { state, setActiveFile } = useAiIde();
+  const { state, setActiveFile, dispatch } = useAiIde();
   const { workspaceId, status, statusMessage, failedFiles, files } = state;
   // The project record this app belongs to: known from the create call, or found by workspace for a restored app.
   const projects = useQuery({ queryKey: PROJECTS_QUERY_KEY, queryFn: api.listProjects, enabled: !knownProjectId && !!workspaceId });
@@ -1059,13 +1036,32 @@ function IdeLayout({ idea, restored, projectId: knownProjectId }: { idea: string
   const { startGeneration, attachToRun } = useAiGenerationWS(workspaceId);
   const startedRef = useRef(false);
   const attachedRef = useRef(false);
+  // The durable record of this workspace's builds: Cancel while one runs, Resume when one stopped short.
+  const runsQuery = useQuery({
+    queryKey: ["ai-ide", "runs", workspaceId],
+    queryFn: () => api.listWorkspaceRuns(workspaceId!),
+    enabled: !!workspaceId && (status === "error" || status === "done"),
+  });
+  const resumableRun = runsQuery.data?.find((r) => r.resumable) ?? null;
+  const cancelMutation = useMutation({
+    mutationFn: () => api.cancelWorkspaceRun(workspaceId!),
+    onSuccess: () => toast.info("Stopping the build", { description: "Files already written stay in the workspace." }),
+    onError: (e) => toast.error("The build was not stopped", { description: apiErrorMessage(e) }),
+  });
+  const resumeMutation = useMutation({
+    mutationFn: () => api.resumeRun(resumableRun!.run_id),
+    onSuccess: () => {
+      dispatch({ type: "SET_STATUS", status: "generating", message: "Resuming the build…" });
+      attachToRun();
+    },
+    onError: (e) => toast.error("The build was not resumed", { description: apiErrorMessage(e) }),
+  });
   // Code and the running app side by side while a run streams in; a restored
   // workspace opens on the app itself.
   const [centerView, setCenterView] = useState<CenterView>(() => (status === "done" ? "preview" : "split"));
   const pendingFiles = useMemo(() => pendingPreviewFiles(state), [state]);
   const generating = status === "creating" || status === "planning" || status === "generating";
   // ── Visual editing and design ─────────────────────────────────────────────
-  const { dispatch } = useAiIde();
   const [rightTab, setRightTab] = useState<"chat" | "design">("chat");
   const [inspecting, setInspecting] = useState(false);
   const [selection, setSelection] = useState<SelectedElement | null>(null);
@@ -1370,6 +1366,31 @@ function IdeLayout({ idea, restored, projectId: knownProjectId }: { idea: string
             </span>
           )}
           {badge && <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>}
+          {inProgress && workspaceId && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => cancelMutation.mutate()}
+              disabled={cancelMutation.isPending}
+              title="Stops the build; files already written stay"
+            >
+              {cancelMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+              Stop build
+            </Button>
+          )}
+          {!inProgress && resumableRun && (
+            <Button
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => resumeMutation.mutate()}
+              disabled={resumeMutation.isPending}
+              title={`Continues build ${resumableRun.run_id.slice(0, 8)} from its plan; ${resumableRun.files_done.length} file(s) already written are kept`}
+            >
+              {resumeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              Resume build
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

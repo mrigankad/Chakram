@@ -138,6 +138,25 @@ export interface DesignPackList {
 
 export const DESIGN_PACKS_QUERY_KEY = ["design-packs"] as const;
 
+/** One build of an App Studio workspace as the run store records it. */
+export interface WorkspaceRun {
+  run_id: string;
+  workspace_id: string;
+  status: "running" | "done" | "failed" | "cancelled" | "interrupted";
+  resumable: boolean;
+  cancel_requested: boolean;
+  resume_of: string | null;
+  app_name: string | null;
+  files_planned: number;
+  files_done: string[];
+  files_failed: string[];
+  last_status: string | null;
+  error: string | null;
+  summary: Record<string, unknown> | null;
+  created_at: string;
+  finished_at: string | null;
+}
+
 import type { OrgTheme } from "@/lib/design-pack";
 export type { OrgTheme };
 
@@ -1654,6 +1673,16 @@ export const api = {
     apiClient.post<ProjectHealth>(`/projects/${encodeURIComponent(id)}/health`).then((r) => r.data),
   getProjectGate: (id: string) =>
     apiClient.get<ProjectGate>(`/projects/${encodeURIComponent(id)}/gate`).then((r) => r.data),
+
+  // ── App Studio runs (durable record of every build) ──
+  listWorkspaceRuns: (workspaceId: string) =>
+    apiClient.get<{ runs: WorkspaceRun[] }>(`/ai-ide/workspace/${encodeURIComponent(workspaceId)}/runs`).then((r) => r.data.runs),
+  /** Stops the build going for the workspace; 409 when none is running. */
+  cancelWorkspaceRun: (workspaceId: string) =>
+    apiClient.post<{ cancelled: boolean; run_id: string; immediate: boolean }>(`/ai-ide/workspace/${encodeURIComponent(workspaceId)}/cancel`).then((r) => r.data),
+  /** Continues an interrupted, cancelled or failed build from its stored plan. */
+  resumeRun: (runId: string) =>
+    apiClient.post<{ run_id: string; workspace_id: string; resume_of: string }>(`/ai-ide/runs/${encodeURIComponent(runId)}/resume`).then((r) => r.data),
 
   // ── Org connectors (reconfigurable secrets) ──
   getConnectors: () =>

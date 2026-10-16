@@ -167,3 +167,16 @@ Checks: backend 688 passed / 1 skipped (10 new in `tests/test_model_providers.py
 **Not done**: a live call against Azure or Gemini (no account here; MOD rows stay at unit level), Entra ID and Vertex AI, per-model cost rates. The rest of T-080 (durable runs, leases, cancel, sandboxed runtime) is untouched.
 
 **Next task:** durable runs (T-080's HAR 05–07: generation and test runs persisted with sequence numbers, leases and cancel) or the cleanup slice (Pipeline page retired in favour of the project view, T-004 dead code, T-050 kit controls).
+
+## 2026-10-16 — Durable runs for App Studio builds (T-080, HAR 05–07)
+
+Checks: backend 689 passed / 1 skipped (5 new in `tests/test_durable_runs.py`, the run-related suites repeated without a failure); frontend tsc clean, 540 vitest passed, build passed.
+
+- `backend/app/services/run_store.py` (`docs/chakram/RUNS.md`): every build has a record (`runs`) and ordered, token-free events (`run_events`, gap-free `seq`), a lease renewed by heartbeat, a cancel flag and the plan it was built from. The startup reaper marks runs whose worker died as interrupted with the reason; nothing is replayed on its own.
+- Cancel: `POST /ai-ide/workspace/{id}/cancel` stops a run in this process at once and flags it for any other; the worker's heartbeat cancels the task and no new model call starts after a cancel. Resume: `POST /ai-ide/runs/{id}/resume` continues from the stored plan, skips files already in the workspace, keeps their routes wired and reports `files_skipped`.
+- The generation socket reports an interrupted or cancelled build on attach (`RUN_INTERRUPTED`) instead of showing a half-built app at rest; App Studio has **Stop build** while a run goes and **Resume build** after one stopped short. `GET /ai-ide/workspace/{id}/runs` and `GET /ai-ide/runs/{id}?after=` expose the record.
+- Found on the way: resuming a run whose files were all written would have stripped the routes from `App.tsx` (skipped pages did not count as generated); fixed and covered.
+
+**Not done**: a fencing token on workspace writes (HAR 08), test-execution runs on the same store, the sandboxed runtime and preview revision (PRE 01–02). A live interrupted build (kill the server mid-run, restart, resume) was not exercised here; the unit tests simulate the lease expiry.
+
+**Next task:** cleanup slice (retire the Pipeline page in favour of the project view, T-004 dead code, T-050 kit controls) or the `detail` block for composed apps.

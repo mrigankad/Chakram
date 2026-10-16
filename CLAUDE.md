@@ -149,7 +149,12 @@ PID only. Do not touch Docker containers other than `aidlc-mongo`.
 - A build is a server-side run (`backend/app/services/ai_ide_generation.py`): the
   WebSocket only streams it. A reload or dropped socket does not stop the run; the
   page re-attaches with `{"attach": true}` and gets a snapshot (plan, files so far,
-  the file streaming now) before live events. Runs live in the process (one instance).
+  the file streaming now) before live events. The run task lives in the process, its
+  record does not: `services/run_store.py` keeps every build (`runs`, ordered token-free
+  `run_events`, a lease renewed by heartbeat, the plan). A restart marks runs whose lease
+  expired as interrupted; **Stop build** cancels (no new model call starts), **Resume
+  build** continues from the stored plan skipping files already written. See
+  `docs/chakram/RUNS.md`.
 - The run announces a `PLAN` first, strips stray markdown fences before saving, and
   re-wires `src/App.tsx` routes each time a page finishes, so the preview shows pages
   as they land. Failed files get `FILE_ERROR` and nothing is written for them.

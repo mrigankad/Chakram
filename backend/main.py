@@ -117,6 +117,14 @@ async def _ensure_indexes_and_seed() -> None:
     except Exception as exc:
         print(f"[DB] activity_history index creation failed (non-fatal): {exc}")
     try:
+        from app.services import run_store
+        await run_store.ensure_indexes(get_db())
+        reaped = await run_store.reap_stale(get_db())
+        if reaped:
+            print(f"[Runs] {reaped} build(s) whose worker stopped were marked interrupted")
+    except Exception as exc:
+        print(f"[DB] run store setup failed (non-fatal): {exc}")
+    try:
         await ensure_core_indexes(get_db())
     except Exception as exc:
         print(f"[DB] core index creation failed (non-fatal): {exc}")

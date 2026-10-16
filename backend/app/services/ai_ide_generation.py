@@ -26,8 +26,9 @@ from app.engines.generator import stream_file, strip_code_fences
 from app.engines.injector import inject_routes, nav_items
 from app.engines.plan_schema import PlanError, normalize_plan
 from app.engines.planner import plan_files, plan_spec, seed_rows
+from app.engines.spec import normalize_spec
 from app.engines.verify import verify_file
-from app.services import ai_ide_service
+from app.services import ai_ide_service, run_store
 
 logger = logging.getLogger(__name__)
 
@@ -104,10 +105,23 @@ class GenerationRun:
     run_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     usage: dict[str, int] = field(default_factory=lambda: {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0})
     warnings: list[dict] = field(default_factory=list)
+    # Durability (run_store): the database the run is recorded in, the run it continues,
+    # the writer that stores events in order, and the cancel flag a heartbeat may set.
+    db: Any = None
+    resume_of: str | None = None
+    skipped: list[str] = field(default_factory=list)
+    cancel_requested: bool = False
+    _persist_queue: "asyncio.Queue[dict | None] | None" = None
+    _persist_task: asyncio.Task | None = None
+    _heartbeat_task: asyncio.Task | None = None
 
     @property
     def finished(self) -> bool:
         return self.final_event is not None
+
+    @property
+    def durable(self) -> bool:
+        return self.db is not None
 
     def add_usage(self, prompt_tokens: int, completion_tokens: int) -> None:
         self.usage["calls"] += 1
@@ -121,6 +135,8 @@ class GenerationRun:
     # ── Events ────────────────────────────────────────────────────────────
     def emit(self, event: dict) -> None:
         self._record(event)
+        if self._persist_queue is not None and event.get("type") in run_store.PERSISTED:
+            self._persist_queue.put_nowait(event)
         for queue in list(self.subscribers):
             queue.put_nowait(event)
 
@@ -204,17 +220,75 @@ def get(workspace_id: str) -> GenerationRun | None:
     return _runs.get(workspace_id)
 
 
-def start(workspace_id: str, org_id: str, idea: str) -> GenerationRun:
-    """Start a run for the workspace. An unfinished run is returned instead of started twice."""
+def start(workspace_id: str, org_id: str, idea: str, db: Any = None, resume_of: str | None = None) -> GenerationRun:
+    """Start a run for the workspace. An unfinished run is returned instead of started twice.
+
+    With `db` the run is recorded in `run_store` (events, lease, cancel). `resume_of`
+    continues an interrupted run: its plan is reused and files already in the
+    workspace are skipped.
+    """
     _evict_old()
     existing = _runs.get(workspace_id)
     if existing is not None and not existing.finished:
         return existing
-    run = GenerationRun(workspace_id=workspace_id, org_id=org_id, idea=idea)
+    run = GenerationRun(workspace_id=workspace_id, org_id=org_id, idea=idea, db=db, resume_of=resume_of)
     _runs[workspace_id] = run
     # The task inherits the caller's context (the org's model and connectors).
     run.task = asyncio.get_running_loop().create_task(_execute(run))
     return run
+
+
+def cancel(workspace_id: str) -> GenerationRun | None:
+    """Cancel the workspace's run in this process; None when there is none going."""
+    run = _runs.get(workspace_id)
+    if run is None or run.finished or run.task is None:
+        return None
+    run.cancel_requested = True
+    run.task.cancel()
+    return run
+
+
+async def _persist_loop(run: GenerationRun) -> None:
+    """Writes the run's events to the store in order; one writer per run keeps `seq` gap-free."""
+    assert run._persist_queue is not None
+    while True:
+        event = await run._persist_queue.get()
+        if event is None:
+            return
+        try:
+            await run_store.append(run.db, run.run_id, event)
+        except Exception:  # noqa: BLE001 - the store never breaks a build
+            logger.exception("[AI IDE] could not persist an event for run %s", run.run_id)
+
+
+async def _heartbeat_loop(run: GenerationRun) -> None:
+    """Renews the lease and picks up a cancel asked through any process."""
+    while True:
+        await asyncio.sleep(run_store.HEARTBEAT_SECONDS)
+        try:
+            doc = await run_store.heartbeat(run.db, run.run_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("[AI IDE] heartbeat failed for run %s", run.run_id)
+            continue
+        if doc is not None and doc.get("cancel_requested") and not run.cancel_requested and run.task is not None:
+            run.cancel_requested = True
+            run.task.cancel()
+            return
+
+
+async def check_cancel(run: GenerationRun) -> None:
+    """Between steps: stop now if a cancel was asked through the store (no new model call starts)."""
+    if run.cancel_requested:
+        raise asyncio.CancelledError()
+    if not run.durable:
+        return
+    try:
+        doc = await run.db[run_store.RUNS].find_one({"run_id": run.run_id}, {"cancel_requested": 1})
+    except Exception:  # noqa: BLE001
+        return
+    if doc and doc.get("cancel_requested"):
+        run.cancel_requested = True
+        raise asyncio.CancelledError()
 
 
 def _evict_old() -> None:
@@ -236,19 +310,59 @@ async def _note(workspace_id: str, **fields: Any) -> None:
 
 
 async def _execute(run: GenerationRun) -> None:
+    cancelled = False
+    if run.durable:
+        try:
+            await run_store.create(run.db, run_id=run.run_id, org_id=run.org_id, kind="generation",
+                                   workspace_id=run.workspace_id, idea=run.idea, resume_of=run.resume_of)
+            run._persist_queue = asyncio.Queue()
+            run._persist_task = asyncio.get_running_loop().create_task(_persist_loop(run))
+            run._heartbeat_task = asyncio.get_running_loop().create_task(_heartbeat_loop(run))
+        except Exception:  # noqa: BLE001 - a build still runs when the store is unavailable
+            logger.exception("[AI IDE] run %s could not be recorded; continuing without durability", run.run_id)
+            run.db = None
     try:
         await _note(run.workspace_id, idea=run.idea[:2000], status="generating")
         await _generate(run)
     except asyncio.CancelledError:
-        run.emit({"type": "ERROR", "message": "Generation was cancelled"})
-        raise
+        cancelled = True
+        run.emit({"type": "ERROR", "message": "Generation was cancelled", "cancelled": True, "run_id": run.run_id})
+        if not run.cancel_requested:
+            raise  # the process is shutting down, not the user cancelling
     except Exception as exc:  # noqa: BLE001 - the client gets the reason, whatever it is
         logger.exception("[AI IDE] generation failed for workspace %s", run.workspace_id)
-        run.emit({"type": "ERROR", "message": str(exc)})
+        run.emit({"type": "ERROR", "message": str(exc), "run_id": run.run_id})
     finally:
         final = run.final_event or {}
         ok = final.get("type") == "GENERATION_DONE" and not final.get("files_failed")
-        await _note(run.workspace_id, status="done" if ok else "error")
+        status = "cancelled" if cancelled else ("done" if ok else "error")
+        await _note(run.workspace_id, status=status)
+        await _close_store(run, final, status)
+
+
+async def _close_store(run: GenerationRun, final: dict, status: str) -> None:
+    if not run.durable:
+        return
+    if run._heartbeat_task is not None:
+        run._heartbeat_task.cancel()
+    if run._persist_queue is not None and run._persist_task is not None:
+        run._persist_queue.put_nowait(None)
+        try:
+            await asyncio.wait_for(asyncio.shield(run._persist_task), timeout=10)
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        if status == "cancelled":
+            await run_store.finish(run.db, run.run_id, "cancelled", error="Cancelled by the user")
+        elif final.get("type") == "GENERATION_DONE":
+            summary = {k: final.get(k) for k in ("files_total", "files_generated", "files_failed", "files_skipped", "composed")}
+            summary["usage"] = dict(run.usage)
+            await run_store.finish(run.db, run.run_id, "done" if status == "done" else "failed", summary=summary,
+                                   error=None if status == "done" else f"{final.get('files_failed')} file(s) failed")
+        else:
+            await run_store.finish(run.db, run.run_id, "failed", error=final.get("message") or "Generation failed")
+    except Exception:  # noqa: BLE001
+        logger.exception("[AI IDE] could not close run %s in the store", run.run_id)
 
 
 def _is_hard(problem: str) -> bool:
@@ -336,9 +450,88 @@ async def _plan_composed(run: GenerationRun, design_notes: str | None):
     return None
 
 
+def _plan_record(app_name: str, description: str, routes_list: list[dict], model_files: list[dict], composed: bool, files_order: list[str]) -> dict:
+    """The plan as the store keeps it: enough to resume without a planner call."""
+    keep = ("path", "component_name", "description", "imports", "components", "kind", "role", "page_title")
+    return {
+        "app_name": app_name, "description": description, "routes": routes_list, "composed": composed, "files": files_order,
+        "model_files": [{k: v for k, v in f.items() if k in keep and isinstance(v, (str, int, float, bool, list, dict))} for f in model_files],
+    }
+
+
+def _existing(workspace_id: str, path: str) -> bool:
+    try:
+        return bool(ai_ide_service.read_file(workspace_id, path).strip())
+    except Exception:  # noqa: BLE001 - missing file
+        return False
+
+
+async def _resume(run: GenerationRun) -> bool:
+    """Continue the run `run.resume_of` from its stored plan; False when there is nothing to resume from."""
+    emit = run.emit
+    prior = await run_store.get(run.db, run.org_id, run.resume_of) if run.durable and run.resume_of else None
+    plan = (prior or {}).get("plan") or {}
+    if not plan:
+        return False
+    workspace_id = run.workspace_id
+    app_name, description = plan.get("app_name") or "", plan.get("description") or ""
+    routes_list = plan.get("routes") or []
+    files_order = plan.get("files") or []
+    emit({"type": "PLAN", "app_name": app_name, "description": description, "files": files_order, "routes": routes_list, "resumed_from": run.resume_of})
+    pre_files: dict[str, str] = {}
+    post_files: dict[str, str] = {}
+    if plan.get("composed"):
+        try:
+            spec = normalize_spec(json.loads(ai_ide_service.read_file(workspace_id, "app.spec.json")))
+        except Exception as exc:  # noqa: BLE001
+            emit({"type": "STATUS", "message": f"The saved app spec could not be read ({exc}); planning again."})
+            return False
+        raw_rows: Any = {}
+        if not _existing(workspace_id, "src/data/seed.ts"):
+            try:
+                raw_rows = await asyncio.wait_for(seed_rows(spec, log_extra=run.log_extra, usage_sink=run.add_usage), timeout=FILE_TIMEOUT)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                emit({"type": "STATUS", "message": f"Seed data could not be generated ({exc}); using plain placeholder rows."})
+        rows, _ = composer.coerce_seed(spec, raw_rows)
+        composed = composer.compose(spec, rows)
+        for path in composer.fixed_paths(spec):
+            if not _existing(workspace_id, path):
+                pre_files[path] = composed[path]
+        for page in spec.pages:
+            path = f"src/pages/{page.component}.tsx"
+            post_files[path] = composed[path]
+    model_files = []
+    for f in plan.get("model_files") or []:
+        if _existing(workspace_id, f["path"]):
+            run.skipped.append(f["path"])
+            continue
+        model_files.append(dict(f))
+    skipped = [p for p in files_order if p not in {f["path"] for f in model_files} and p not in pre_files and p not in post_files]
+    for p in skipped:
+        if p not in run.skipped:
+            run.skipped.append(p)
+    emit({"type": "STATUS", "message": f"Resuming: {len(run.skipped)} file(s) already written, {len(model_files) + len(pre_files) + len(post_files)} to go."})
+    for file_spec in model_files:
+        if app_name:
+            file_spec["app_name"] = app_name
+        file_spec["routes"] = routes_list
+        file_spec.setdefault("components", [])
+        file_spec["usage_sink"] = run.add_usage
+        file_spec["log_extra"] = run.log_extra
+    if run.durable:
+        await run_store.set_plan(run.db, run.run_id, plan)
+    await _build(run, pre_files, model_files, post_files, routes_list, app_name, already={route_module(p) for p in run.skipped})
+    return True
+
+
 async def _generate(run: GenerationRun) -> None:
     workspace_id = run.workspace_id
     emit = run.emit
+
+    if run.resume_of and await _resume(run):
+        return
 
     emit({"type": "STATUS", "message": "Planning your app…"})
     design_notes = None
@@ -364,6 +557,9 @@ async def _generate(run: GenerationRun) -> None:
         emit({"type": "PLAN", "app_name": app_name, "description": description, "files": files_order, "routes": routes_list})
         emit({"type": "STATUS", "message": f"Spec ready: {len(spec.entities)} entities, {len(spec.pages)} pages. Writing seed data…"})
         await _note(workspace_id, spec=spec.model_dump())
+        if run.durable:
+            await run_store.set_plan(run.db, run.run_id, _plan_record(app_name, description, routes_list, model_files, True, files_order))
+        await check_cancel(run)
         raw_rows: Any = {}
         try:
             raw_rows = await asyncio.wait_for(
@@ -392,6 +588,9 @@ async def _generate(run: GenerationRun) -> None:
         emit({"type": "PLAN", "app_name": app_name, "description": description,
               "files": [f["path"] for f in model_files], "routes": routes_list})
         emit({"type": "STATUS", "message": f"Plan ready: generating {len(model_files)} file(s)…"})
+        if run.durable:
+            await run_store.set_plan(run.db, run.run_id, _plan_record(app_name, description, routes_list, model_files, False, [f["path"] for f in model_files]))
+        await check_cancel(run)
 
     # Every model-written file knows the app it belongs to, so each prompt carries the same name and look.
     for file_spec in model_files:
@@ -417,7 +616,9 @@ async def _build(
     post_files: dict[str, str],
     routes_list: list[dict],
     app_name: str,
+    already: set[str] | None = None,
 ) -> None:
+    """`already`: route modules written by an earlier run (a resume) that count as generated."""
     workspace_id = run.workspace_id
     emit = run.emit
 
@@ -440,12 +641,12 @@ async def _build(
             emit({"type": "STATUS", "message": f"Warning: route injection failed {exc}"})
 
     failed_files: list[dict] = []
-    generated_modules: set[str] = set()
+    generated_modules: set[str] = set(already or ())
     routed_modules = {route_module(r["importPath"]) for r in routes_list}
     planned_paths = {f["path"] for f in model_files} | set(pre_files) | set(post_files)
     known_files: set[str] = set(kit.kit_files()) | set(_TEMPLATE_FILES)
     kit_exports = set(kit.kit_exports()) if kit.has_kit() else None
-    total = len(model_files) + len(pre_files) + len(post_files)
+    total = len(model_files) + len(pre_files) + len(post_files) + len(run.skipped)
 
     # The app's name and full navigation are known from the plan: show them right away.
     _wire_routes(generated_modules)
@@ -495,6 +696,7 @@ async def _build(
 
     async def _generate_one(file_spec: dict) -> None:
         path = file_spec["path"]
+        await check_cancel(run)  # a cancel asked through the store starts no new model call
         file_spec["context_files"] = dict(written_context)
         error: str | None = None
         cleaned = ""
@@ -586,6 +788,7 @@ async def _build(
         "files_total": total,
         "files_generated": total - len(failed_files),
         "files_failed": len(failed_files),
+        "files_skipped": len(run.skipped),
         "failed_files": failed_files,
         "warnings": list(run.warnings),
         "usage": dict(run.usage),

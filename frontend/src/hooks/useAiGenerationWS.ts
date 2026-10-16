@@ -91,6 +91,17 @@ export function useAiGenerationWS(workspaceId: string | null) {
         }
 
         switch (data.type) {
+          case "RUN_INTERRUPTED":
+            // The server that ran the build stopped (or it was cancelled); the page offers Resume.
+            sawEvent = true;
+            dispatch({ type: "ADD_LOG", message: `Build ${data.status}: ${data.message}` });
+            dispatch({
+              type: "SET_STATUS",
+              status: "error",
+              message: `${data.message} ${Array.isArray(data.files_done) ? data.files_done.length : 0} of ${data.files_planned ?? "?"} files were written; you can resume the build.`,
+            });
+            break;
+
           case "NO_RUN":
             // Nothing to attach to: the workspace is simply at rest.
             finishedRef.current = true;

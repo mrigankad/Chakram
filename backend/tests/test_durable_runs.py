@@ -1,107 +1,175 @@
-"""Live Test Runner run state is in MongoDB while the run is in progress, with its screenshots."""
-from datetime import timedelta
-
-import pytest
+"""Builds survive the process: ordered events, a lease, cancel from anywhere, resume from the plan (HAR 05–07)."""
+import asyncio
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from app.auth.session import create_session_cookie
-from app.services import durable_state, organization_service, playwright_service
+from app.routes import ai_ide
+from app.services import ai_ide_generation, organization_service, run_store
+
+from tests.test_ai_ide_generation import PLAN, FakeWebSocket, FakeWorkspace, _patched, _stream
+
+FILES = {"src/components/Navbar.tsx": "nav code", "src/pages/Home.tsx": "home code", "src/pages/Reports.tsx": "reports code"}
 
 
-@pytest.fixture(autouse=True)
-def _fast_flush(monkeypatch):
-    monkeypatch.setattr(durable_state, "FLUSH_SECONDS", 0.01)
-    yield
-    playwright_service._runs.clear()
+async def _org_and_cookie(app_client, db):
+    org = await organization_service.create_organization(db, workos_org_id="org_a", name="A")
+    cookie = create_session_cookie(user_id="user", org_id=org.id)
+    app_client.cookies.set("aidlc_session", cookie)
+    return org, cookie
 
 
-def _step(status="pass", screenshot="c2hvdA==", error=None):
-    return {"step_description": "open", "screenshot": screenshot, "status": status, "error": error}
+async def test_events_are_stored_in_order_without_tokens_and_the_run_closes(app_client, db):
+    org, cookie = await _org_and_cookie(app_client, db)
+    workspace = FakeWorkspace()
+    patches = await _patched(workspace, PLAN, _stream(FILES))
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        ws = FakeWebSocket(cookie)
+        await ai_ide.generate(ws, "ws-1")
+        await ai_ide_generation.get("ws-1").task  # the store closes right after the final event
+        run_id = ws.sent[-1]["run_id"]
+        listed = (await app_client.get("/api/ai-ide/workspace/ws-1/runs")).json()["runs"]
+
+    run = await run_store.get(db, org.id, run_id)
+    assert run["status"] == "done" and run["worker"] == run_store.WORKER_ID and run["summary"]["files_total"] == 3
+    assert [f["path"] for f in run["plan"]["model_files"]] == [f["path"] for f in PLAN["files"]] and run["plan"]["composed"] is False
+    events = await run_store.events(db, run_id)
+    assert [e["seq"] for e in events] == list(range(1, len(events) + 1))  # gap-free, ordered
+    kinds = [e["type"] for e in events]
+    assert kinds[0] == "STATUS" and "PLAN" in kinds and kinds[-1] == "GENERATION_DONE" and "STREAM_TOKEN" not in kinds
+    assert all("content" not in e for e in events if e["type"] == "FILE_UPDATE")  # the workspace holds the file
+    assert run_store.progress(events)["files_done"] == list(FILES)
+
+    assert listed[0]["run_id"] == run_id and listed[0]["status"] == "done" and listed[0]["resumable"] is False
+    one = (await app_client.get(f"/api/ai-ide/runs/{run_id}?after={len(events) - 1}")).json()
+    assert [e["type"] for e in one["events"]] == ["GENERATION_DONE"] and one["files_done"] == list(FILES)
+    assert (await app_client.get("/api/ai-ide/runs/nope")).status_code == 404
 
 
-def _result(status, steps, test_id="t1"):
-    return {
-        "test_id": test_id, "test_name": "Login", "status": status, "steps_completed": len(steps),
-        "total_steps": 2, "step_results": steps, "error": None, "duration_ms": None,
-    }
+async def test_cancel_stops_the_build_and_writes_nothing_for_the_file_in_flight(app_client, db):
+    org, cookie = await _org_and_cookie(app_client, db)
+    gate = asyncio.Event()
+    streamed = []
 
+    async def stream_file(file_spec, org_id=None):
+        streamed.append(file_spec["path"])
+        if file_spec["path"] != "src/components/Navbar.tsx":
+            yield "half"
+            await gate.wait()
+        yield "code"
 
-async def test_run_is_persisted_while_running_and_readable_after_a_restart(db, monkeypatch):
-    seen_mid_run: dict = {}
-
-    async def fake_execute(run, tests, target_url, credentials=None):
-        run["results"].append(_result("running", [_step()]))
-        # Give the write-through loop a tick, then look at what MongoDB holds mid-run.
+    workspace = FakeWorkspace()
+    patches = await _patched(workspace, PLAN, stream_file)
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        run = ai_ide_generation.start("ws-1", org.id, "an app", db=db)
         for _ in range(200):
-            doc = await db.playwright_runs.find_one({"_id": run["run_id"]})
-            if doc and doc["results"]:
+            await asyncio.sleep(0.01)
+            if "src/pages/Reports.tsx" in streamed:
                 break
-            await durable_state.asyncio.sleep(0.01)
-        seen_mid_run.update(doc or {})
-        run["results"][0]["step_results"].append(_step("fail", screenshot="ZmFpbA==", error="boom"))
-        run["results"][0].update(status="failed", steps_completed=2)
-        run["failed"] = 1
-        run["status"] = "completed"
-        run["completed_at"] = "2026-01-01T00:00:05+00:00"
-
-    monkeypatch.setattr(playwright_service, "_execute", fake_execute)
-    await playwright_service.execute_playwright_tests(db, "org-1", [{"name": "Login"}], "http://t", "run-1", "a1")
-
-    assert seen_mid_run["status"] == "running"
-    assert seen_mid_run["results"][0]["status"] == "running"
-    assert "screenshot" not in seen_mid_run["results"][0]["step_results"][0]  # kept out of the run document
-
-    # "Restart": nothing in memory. The poll endpoint's read still returns the full run.
-    assert "run-1" not in playwright_service._runs
-    run = await playwright_service.load_run(db, "org-1", "run-1", with_screenshots=True)
-    assert run["status"] == "completed"
-    assert [s["screenshot"] for s in run["results"][0]["step_results"]] == ["c2hvdA==", "ZmFpbA=="]
-    assert "heartbeat_at" not in run and "_id" not in run
-
-    assert await playwright_service.load_run(db, "other-org", "run-1") is None
-    slim = await playwright_service.load_run(db, "org-1", "run-1", with_screenshots=False)
-    assert "screenshot" not in slim["results"][0]["step_results"][0]
+        assert (await app_client.post("/api/ai-ide/workspace/ws-1/cancel")).json()["immediate"] is True
+        try:
+            await asyncio.wait_for(run.task, timeout=5)
+        except asyncio.CancelledError:
+            pass
+        assert (await app_client.post("/api/ai-ide/workspace/ws-1/cancel")).status_code == 409  # nothing running now
+    assert run.final_event["type"] == "ERROR" and run.final_event["cancelled"] is True
+    assert workspace.files["src/components/Navbar.tsx"] == "code" and "src/pages/Home.tsx" not in workspace.files
+    stored = await run_store.get(db, org.id, run.run_id)
+    assert stored["status"] == "cancelled" and stored["finished_at"] is not None
+    assert (await run_store.events(db, run.run_id))[-1]["type"] == "ERROR"
+    gate.set()
 
 
-async def test_run_cut_off_by_a_restart_is_reported_failed_not_running(app_client, db):
-    org = await organization_service.create_organization(db, workos_org_id="org_r", name="R")
-    app_client.cookies.set("aidlc_session", create_session_cookie(user_id="u", org_id=org.id))
-    stale = durable_state.now() - timedelta(seconds=durable_state.STALE_AFTER_SECONDS + 5)
-    await db.playwright_runs.insert_one({
-        "_id": "run-dead", "run_id": "run-dead", "org_id": org.id, "analysis_id": "a1", "status": "running",
-        "results": [_result("passed", [], "t1"), _result("running", [], "t2")],
-        "total": 3, "passed": 1, "failed": 0, "started_at": "2026-01-01T00:00:00+00:00",
-        "completed_at": None, "error": None, "heartbeat_at": stale,
-    })
+async def test_a_cancel_asked_through_the_store_reaches_the_worker_by_heartbeat(app_client, db, monkeypatch):
+    org, _ = await _org_and_cookie(app_client, db)
+    monkeypatch.setattr(run_store, "HEARTBEAT_SECONDS", 0.02)
+    gate = asyncio.Event()
 
-    body = (await app_client.get("/api/repo/execution/run-dead")).json()
+    async def stream_file(file_spec, org_id=None):
+        yield "x"
+        await gate.wait()
+        yield "y"
 
-    assert body["status"] == "failed"
-    assert "restart" in body["error"]
-    assert [r["status"] for r in body["results"]] == ["passed", "failed"]
-    assert (body["passed"], body["failed"]) == (1, 1)
-
-    listed = (await app_client.get("/api/repo/runs")).json()["runs"]
-    assert [(r["run_id"], r["status"]) for r in listed] == [("run-dead", "failed")]
-
-
-async def test_running_run_with_a_live_owner_is_left_alone(db):
-    await db.playwright_runs.insert_one({
-        "_id": "run-live", "run_id": "run-live", "org_id": "org-1", "status": "running", "results": [],
-        "started_at": "2026-01-01T00:00:00+00:00", "heartbeat_at": durable_state.now(),
-    })
-    assert (await playwright_service.load_run(db, "org-1", "run-live"))["status"] == "running"
-    assert (await playwright_service.list_runs_from_db(db, "org-1"))[0]["status"] == "running"
+    workspace = FakeWorkspace()
+    patches = await _patched(workspace, PLAN, stream_file)
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        run = ai_ide_generation.start("ws-1", org.id, "an app", db=db)
+        await asyncio.sleep(0.05)
+        assert await run_store.request_cancel(db, org.id, run.run_id)  # e.g. another process's cancel route
+        try:
+            await asyncio.wait_for(run.task, timeout=5)
+        except asyncio.CancelledError:
+            pass
+    assert run.cancel_requested and (await run_store.get(db, org.id, run.run_id))["status"] == "cancelled"
+    assert workspace.files.keys() == {"src/App.tsx"}  # the half-streamed file was never written
+    gate.set()
 
 
-async def test_run_stays_in_memory_when_mongo_rejects_the_final_write(db, monkeypatch):
-    async def fake_execute(run, tests, target_url, credentials=None):
-        run["status"] = "completed"
+async def test_a_lost_worker_is_reaped_and_the_build_resumes_from_its_plan(app_client, db):
+    org, cookie = await _org_and_cookie(app_client, db)
+    # A run another worker owned, whose lease ran out after Navbar was written.
+    prior = await run_store.create(db, run_id="run-old", org_id=org.id, kind="generation", workspace_id="ws-1", idea="a reporting app")
+    await run_store.set_plan(db, "run-old", ai_ide_generation._plan_record("Reports", "d", PLAN["routes"], PLAN["files"], False, [f["path"] for f in PLAN["files"]]))
+    for event in ({"type": "PLAN"}, {"type": "FILE_CREATE", "path": "src/components/Navbar.tsx"}, {"type": "FILE_DONE", "path": "src/components/Navbar.tsx"}):
+        await run_store.append(db, "run-old", event)
+    await db[run_store.RUNS].update_one({"run_id": "run-old"}, {"$set": {"worker": "other:1", "lease_until": datetime.now(timezone.utc) - timedelta(seconds=1)}})
 
-    async def broken_persist(*_a, **_k):
-        raise RuntimeError("mongo down")
+    assert await run_store.reap_stale(db) == 1
+    reaped = await run_store.get(db, org.id, "run-old")
+    assert reaped["status"] == "interrupted" and "lease expired" in reaped["error"]
+    assert await run_store.reap_stale(db) == 0
 
-    monkeypatch.setattr(playwright_service, "_execute", fake_execute)
-    monkeypatch.setattr(playwright_service, "_persist_run", broken_persist)
-    await playwright_service.execute_playwright_tests(db, "org-1", [], "http://t", "run-2", "a1")
+    workspace = FakeWorkspace()
+    workspace.files["src/components/Navbar.tsx"] = "nav code"
+    streamed = []
 
-    assert (await playwright_service.load_run(db, "org-1", "run-2"))["status"] == "completed"
+    async def stream_file(file_spec, org_id=None):
+        streamed.append(file_spec["path"])
+        yield FILES[file_spec["path"]]
+
+    patches = await _patched(workspace, PLAN, stream_file)
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        # Attaching after the restart says what happened instead of pretending the app is at rest.
+        ws = FakeWebSocket(cookie, idea='{"attach": true}')
+        await ai_ide.generate(ws, "ws-1")
+        assert [m["type"] for m in ws.sent] == ["RUN_INTERRUPTED", "NO_RUN"]
+        assert ws.sent[0]["resumable"] is True and ws.sent[0]["files_done"] == ["src/components/Navbar.tsx"]
+
+        resp = await app_client.post("/api/ai-ide/runs/run-old/resume")
+        assert resp.status_code == 200, resp.text
+        new_id = resp.json()["run_id"]
+        run = ai_ide_generation.get("ws-1")
+        assert run is not None and run.run_id == new_id
+        await run.task
+        assert sorted(streamed) == ["src/pages/Home.tsx", "src/pages/Reports.tsx"]  # Navbar was kept, not regenerated
+        done = run.final_event
+        assert done["type"] == "GENERATION_DONE" and done["files_total"] == 3 and done["files_skipped"] == 1 and done["files_failed"] == 0
+        assert workspace.files["src/pages/Home.tsx"] == "home code" and "./pages/Reports" in workspace.files["src/App.tsx"]
+
+        # Resuming once everything is written regenerates nothing and keeps the routes wired.
+        assert (await app_client.post("/api/ai-ide/runs/run-old/resume")).status_code == 200
+        again = ai_ide_generation.get("ws-1")
+        await again.task
+        assert again.final_event["files_skipped"] == 3 and len(streamed) == 2
+        assert "./pages/Reports" in workspace.files["src/App.tsx"] and "./pages/Home" in workspace.files["src/App.tsx"]
+        runs = (await app_client.get("/api/ai-ide/workspace/ws-1/runs")).json()["runs"]
+
+    stored = await run_store.get(db, org.id, new_id)
+    assert stored["status"] == "done" and stored["resume_of"] == "run-old" and stored["plan"]["app_name"] == "Reports"
+    assert [r["status"] for r in runs] == ["done", "done", "interrupted"] and runs[1]["resume_of"] == "run-old"
+
+
+async def test_resume_refuses_what_cannot_be_continued(app_client, db):
+    org, _ = await _org_and_cookie(app_client, db)
+    assert (await app_client.post("/api/ai-ide/runs/nope/resume")).status_code == 404
+    await run_store.create(db, run_id="run-noplan", org_id=org.id, kind="generation", workspace_id="ws-1")
+    await run_store.finish(db, "run-noplan", "failed", error="planner down")
+    resp = await app_client.post("/api/ai-ide/runs/run-noplan/resume")
+    assert resp.status_code == 409 and "before a plan" in resp.json()["detail"]
+    await run_store.create(db, run_id="run-going", org_id=org.id, kind="generation", workspace_id="ws-2")
+    assert (await app_client.post("/api/ai-ide/runs/run-going/resume")).status_code == 409
+    # Another org's run is not visible.
+    other = await organization_service.create_organization(db, workos_org_id="org_b", name="B")
+    app_client.cookies.set("aidlc_session", create_session_cookie(user_id="u2", org_id=other.id))
+    assert (await app_client.post("/api/ai-ide/runs/run-noplan/resume")).status_code == 404
+    assert (await app_client.get("/api/ai-ide/runs/run-noplan")).status_code == 404
