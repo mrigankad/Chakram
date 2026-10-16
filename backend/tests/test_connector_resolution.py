@@ -3,7 +3,7 @@ from contextlib import contextmanager
 
 from app.config import settings
 from app.services import connector_settings_service as connectors
-from app.services import datadog_service, jira_service, slack_service
+from app.services import jira_service, slack_service
 
 
 @contextmanager
@@ -27,24 +27,6 @@ async def test_slack_skips_when_nothing_is_configured(monkeypatch):
     monkeypatch.setattr(settings, "SLACK_WEBHOOK_URL", "")
     with _org({}):
         assert await slack_service.send_message("hi") is False
-
-
-def test_datadog_uses_org_keys_then_env(monkeypatch):
-    monkeypatch.setattr(settings, "DATADOG_API_KEY", "env-api")
-    monkeypatch.setattr(settings, "DATADOG_APP_KEY", "env-app")
-    with _org({}):
-        assert datadog_service._headers()["DD-API-KEY"] == "env-api"
-    with _org({"datadog": {"api_key": "org-api"}}):
-        headers = datadog_service._headers()
-    assert headers["DD-API-KEY"] == "org-api"
-    assert headers["DD-APPLICATION-KEY"] == "env-app"
-
-
-async def test_datadog_skips_when_no_key(monkeypatch):
-    monkeypatch.setattr(settings, "DATADOG_API_KEY", "")
-    with _org({}):
-        assert (await datadog_service.post_event("t", "x"))["status"] == "skipped"
-        assert await datadog_service.get_events() == []
 
 
 async def test_jira_acceptance_criteria_are_added_as_a_comment(monkeypatch):

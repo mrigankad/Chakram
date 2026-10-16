@@ -37,7 +37,7 @@ import {
 export type NavIcon = LucideIcon;
 
 /** Connectors a parked page can depend on (keys of GET /orgs/current/connectors). */
-export type ConnectorKey = "github" | "jira" | "slack" | "datadog";
+export type ConnectorKey = "github" | "jira" | "slack";
 
 export type NavItem = {
   title: string;
@@ -146,7 +146,7 @@ export const platformSections: NavSection[] = [
         url: "/incidents",
         icon: TriangleAlert,
         hint: "Incident response and postmortems",
-        requires: ["slack", "datadog"],
+        requires: ["slack"],
       },
       { title: "Connectors", url: "/settings/connectors", icon: Settings, hint: "GitHub, Vercel, Ollama, Jira keys" },
     ],
@@ -292,7 +292,6 @@ export function configuredConnectors(
   if (isSet(connectors.github?.token)) configured.add("github");
   if (isSet(connectors.jira?.token)) configured.add("jira");
   if (isSet(connectors.slack?.webhook_url)) configured.add("slack");
-  if (isSet(connectors.datadog?.api_key)) configured.add("datadog");
   return configured;
 }
 

@@ -214,6 +214,19 @@ PID only. Do not touch Docker containers other than `aidlc-mongo`.
   and the theme editor (`theme-engine.ts`: brand, surfaces, mode, status/chart colours →
   `src/design.css` overriding the kit's CSS variables, plus fonts/radius in `design.json`).
 
+## Projects and connectors
+
+- A **Project** (`backend/app/services/project_service.py`, `/api/projects`) is the record both
+  halves share: created with an App Studio workspace (or `POST /projects/import` for a
+  repository), updated by push (repo), deploy (deployments), Test this app (requirement) and
+  the build (name, status, spec summary). `GET /projects/{id}` computes Build / Verify /
+  Review / Release / Operate stage statuses from stored data; nothing is copied from runs.
+  See `docs/chakram/PRODUCT_DIRECTION.md` and ADR-6.
+- **Connectors** are declared once in `backend/app/services/connector_registry.py` (kind,
+  secret fields, the features they feed, the pinned API version, a read-only check).
+  `GET /orgs/current/connectors/status` and `POST …/{id}/check` drive the Settings page and
+  the sidebar gating. Add a connector only with a feed and a check (ADR-7). Datadog was removed.
+
 ## UI conventions
 
 The UI follows the Chronos design system (grey page, white containers, 1px muted
@@ -242,7 +255,7 @@ palette colours or gradients. Light is the default theme; dark is a toggle.
 - `JIRA_DOMAIN` / `JIRA_EMAIL` / `JIRA_TOKEN` **not configured**. Jira
   endpoints return `503` with an actionable message (expected, not a bug);
   Sprint/Release-Gate/Pipeline degrade gracefully and record it in `errors`.
-- `SLACK_WEBHOOK_URL`, `DATADOG_API_KEY` / `DATADOG_APP_KEY` not configured
+- `SLACK_WEBHOOK_URL` not configured (Datadog was removed: nothing read it)
 
 `frontend/.env` exists, standard Vite env file.
 

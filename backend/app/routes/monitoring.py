@@ -13,7 +13,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from app.auth.dependencies import get_current_org
 from app.models.organization import OrganizationOut
 from app.services.ai_service import generate_predictive_alert, AIQuotaError
-from app.services import datadog_service, slack_service
+from app.services import slack_service
 
 router = APIRouter(prefix="/monitoring", tags=["Monitoring"])
 
@@ -275,18 +275,6 @@ async def analyze_time_series(body: dict = Body(...), org: OrganizationOut = Dep
                 )
             except Exception:
                 pass
-
-    # Post to Datadog (real series only, and only with a measured overall score)
-    latest_overall = series[-1].get("overall") if isinstance(series[-1], dict) else None
-    if not demo and isinstance(latest_overall, (int, float)) and not isinstance(latest_overall, bool):
-        try:
-            await datadog_service.tag_dataset_analysis(
-                dataset_name="quality_monitoring",
-                quality_score=latest_overall,
-                anomalies=len(anomalies),
-            )
-        except Exception:
-            pass
 
     return {
         "demo": demo,

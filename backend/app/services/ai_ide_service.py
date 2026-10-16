@@ -269,14 +269,21 @@ async def update_app_info(workspace_id: str, **fields: Any) -> None:
     if _db is None:
         return
     clean = {k: v for k, v in fields.items() if k in {"name", "idea", "status"}}
-    if not clean:
-        return
-    try:
-        await _db[REGISTRY].update_one(
-            {"_id": workspace_id}, {"$set": {**clean, "updated_at": datetime.now(timezone.utc)}}
+    if clean:
+        try:
+            await _db[REGISTRY].update_one(
+                {"_id": workspace_id}, {"$set": {**clean, "updated_at": datetime.now(timezone.utc)}}
+            )
+        except Exception:  # noqa: BLE001 - the app still works; only its listing lags
+            logger.exception("[AI IDE] could not update app info for %s", workspace_id)
+    # The project record (ADR-6) follows the build: name, status and the spec summary.
+    org_id = (_workspace_meta.get(workspace_id) or {}).get("org_id")
+    if org_id and any(k in fields for k in ("name", "status", "spec")):
+        from app.services import project_service
+
+        await project_service.note_build(
+            _db, org_id, workspace_id, name=fields.get("name"), status=fields.get("status"), spec=fields.get("spec")
         )
-    except Exception:  # noqa: BLE001 - the app still works; only its listing lags
-        logger.exception("[AI IDE] could not update app info for %s", workspace_id)
 
 
 async def list_apps(db, org_id: str) -> list[dict[str, Any]]:
@@ -439,8 +446,8 @@ async def create_workspace(org_id: str, db=None, pack_id: str | None = None) -> 
     await asyncio.to_thread(_write_workspace_files_to_disk, workspace_id)
     _write_meta(workspace_id)
     if db is not None:
-        if _db is None:
-            bind_db(db)
+        # Always the caller's database: a stale binding (tests, reconnects) must not win.
+        bind_db(db)
         await register(db, workspace_id)
     for path, content in _workspaces[workspace_id].items():
         _mirror(workspace_id, path, content)

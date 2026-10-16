@@ -363,6 +363,7 @@ async def _generate(run: GenerationRun) -> None:
         model_files = [composer.custom_component_spec(page, block, spec) for page, block in spec.custom_blocks()]
         emit({"type": "PLAN", "app_name": app_name, "description": description, "files": files_order, "routes": routes_list})
         emit({"type": "STATUS", "message": f"Spec ready: {len(spec.entities)} entities, {len(spec.pages)} pages. Writing seed data…"})
+        await _note(workspace_id, spec=spec.model_dump())
         raw_rows: Any = {}
         try:
             raw_rows = await asyncio.wait_for(

@@ -101,3 +101,16 @@ Checks: backend 667 passed / 1 skipped; frontend tsc clean, 525 vitest passed, b
 - App Studio's Deployed view gets **Test this app** once a deployment URL exists; it opens Test Execution with the requirement and the URL preselected, so the existing browser engine runs the cases against the deployed app.
 
 **Next task:** T-071 (one TestRun shape across both engines; Pipeline reads stored results) or T-030 (Chakram adopts the kit tokens). T-004 (dead code) and T-050 (kit controls) remain open.
+
+## 2026-10-16 — Direction set; connector registry and project record built (T-100, T-110 done)
+
+Checks: backend 674 passed / 1 skipped; frontend tsc clean, 527 vitest passed, build passed.
+
+- `PRODUCT_DIRECTION.md` and ADR-6..9 record how the two halves join (a Project), the connector policy (one registry; a connector exists only for a feed it proves; Datadog removed; Jira narrowed; Slack as the notify interface), the Operate stage (deployed app's own health first) and the order of the next slices.
+- **Connector registry** (`backend/app/services/connector_registry.py`): kind, secret fields, feeds, pinned API version and a read-only check per connector. `GET /api/orgs/current/connectors/status`, `POST …/{id}/check` (result stored on the org). Settings shows what each connector enables, the API version, and a Check connection button. Datadog is gone from backend, settings, env examples, docs and UI; Incidents are gated on Slack.
+- **Project record** (`backend/app/services/project_service.py`, `routes/projects.py`): created with every App Studio workspace; push sets the repo, deploy appends the deployment, Test this app sets the requirement, the build mirrors name/status/spec summary. `GET /projects/{id}` computes the five stage statuses from stored data (latest test run by requirement, deployment state). `POST /projects/import` registers a repository as a project. Another org cannot see it.
+- Fixed on the way: App Studio now binds the caller's database on every workspace creation (a stale module binding sent mirrored files to the wrong database in tests).
+
+**Not done**: the project view UI (Pipeline page reading the record; Dashboard listing projects) and the Operate health ping; both are slice 3 (T-120).
+
+**Next task:** T-120 (project view), then T-130 (write paths in composed apps).

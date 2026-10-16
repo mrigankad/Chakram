@@ -173,8 +173,7 @@ async def test_analyze_uses_computed_projection_and_survives_ai_failure(app_clie
     _cookies(app_client, org.id)
     # Steady values then a sharp fall: an anomaly on the last point and a falling trend.
     series = _series([95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 95, 83])
-    with patch.object(monitoring, "generate_predictive_alert", new=AsyncMock(side_effect=RuntimeError("model down"))), \
-         patch.object(monitoring.datadog_service, "tag_dataset_analysis", new=AsyncMock()):
+    with patch.object(monitoring, "generate_predictive_alert", new=AsyncMock(side_effect=RuntimeError("model down"))):
         resp = await app_client.post("/api/monitoring/analyze", json={"series": series})
 
     assert resp.status_code == 200

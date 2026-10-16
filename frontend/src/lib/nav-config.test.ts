@@ -44,9 +44,9 @@ describe("visibleSections", () => {
     expect(shown).not.toContain("/ci-intelligence");
   });
 
-  it("shows Incidents with either Slack or Datadog", () => {
+  it("shows Incidents with Slack only", () => {
     expect(urls(visibleSections(platformSections, new Set(["slack"])))).toContain("/incidents");
-    expect(urls(visibleSections(platformSections, new Set(["datadog"])))).toContain("/incidents");
+    expect(urls(visibleSections(platformSections, new Set(["github", "jira"])))).not.toContain("/incidents");
   });
 
   it("keeps section order and unparked items, and does not mutate the input", () => {
@@ -73,7 +73,6 @@ describe("configuredConnectors", () => {
       github: { token: { configured: true, masked: "••••abcd", source: "env" } },
       jira: { token: { configured: false, masked: null, source: "none" }, domain: "" },
       slack: { webhook_url: { configured: true, masked: "••••wxyz", source: "org" } },
-      datadog: { api_key: { configured: false }, app_key: { configured: true } },
     });
     expect([...set].sort()).toEqual(["github", "slack"]);
   });

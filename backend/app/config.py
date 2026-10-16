@@ -63,8 +63,6 @@ class Settings(BaseSettings):
     SLACK_WEBHOOK_URL: str = ""
 
     # Datadog
-    DATADOG_API_KEY: str = ""
-    DATADOG_APP_KEY: str = ""
 
     # WorkOS AuthKit (real user auth + organizations)
     WORKOS_API_KEY: str = ""

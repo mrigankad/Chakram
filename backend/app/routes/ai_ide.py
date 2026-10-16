@@ -19,6 +19,7 @@ from app.services import ai_ide_service
 from app.services import ai_service
 from app.services import connector_settings_service as connectors
 from app.services import design_pack_service
+from app.services import project_service
 from app.services import marks_service
 from app.services import organization_service
 from app.services import vercel_service
@@ -154,7 +155,8 @@ async def create_workspace(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     files = ai_ide_service.list_file_paths(workspace_id)
     meta = ai_ide_service.require_org_workspace(org.id, workspace_id)
-    return {"workspace_id": workspace_id, "file_paths": files, "pack_id": meta.get("pack_id")}
+    project = await project_service.ensure_for_workspace(db, org.id, workspace_id, pack_id=meta.get("pack_id"))
+    return {"workspace_id": workspace_id, "file_paths": files, "pack_id": meta.get("pack_id"), "project_id": project["id"]}
 
 
 # ── Verify a built app ───────────────────────────────────────────────────────
@@ -213,6 +215,8 @@ async def create_test_cases_for_app(
         })
         requirement_id = str(result.inserted_id)
     stored = await test_case_service.create_test_cases_from_ai(db, org.id, requirement_id, cases)
+    await project_service.ensure_for_workspace(db, org.id, workspace_id, name=spec.name)
+    await project_service.set_requirement(db, org.id, workspace_id, requirement_id)
     return {"requirement_id": requirement_id, "test_cases": stored, "created": existing is None}
 
 
@@ -331,6 +335,10 @@ async def ai_ide_git_init_and_push(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     await ai_ide_service.register(db, payload.workspace_id)
+    repo_url = (result or {}).get("repo_url") if isinstance(result, dict) else None
+    if repo_url:
+        await project_service.ensure_for_workspace(db, org.id, payload.workspace_id)
+        await project_service.set_repo(db, org.id, payload.workspace_id, repo_url, (payload.branch or "main"))
     return result
 
 
@@ -355,7 +363,7 @@ async def ai_ide_git_commit_and_push(
 
 
 @router.post("/deploy", dependencies=[Depends(_attach_workspace)])
-async def ai_ide_deploy(payload: DeployWorkspaceRequest, org: OrganizationOut = Depends(get_current_org)):
+async def ai_ide_deploy(payload: DeployWorkspaceRequest, org: OrganizationOut = Depends(get_current_org), db=Depends(get_db)):
     _require_org_workspace(org, payload.workspace_id)
     meta = ai_ide_service.get_workspace_meta(payload.workspace_id)
     repo_url = meta.get("repo_url")
@@ -363,6 +371,13 @@ async def ai_ide_deploy(payload: DeployWorkspaceRequest, org: OrganizationOut = 
         raise HTTPException(status_code=400, detail="Initialize and push repository before deploying")
 
     branch = (payload.branch or meta.get("default_branch") or "main").strip() or "main"
+    deployment = await _trigger_deploy(payload, meta, repo_url, branch)
+    await project_service.ensure_for_workspace(db, org.id, payload.workspace_id)
+    await project_service.add_deployment(db, org.id, payload.workspace_id, {**deployment, "id": deployment.get("deploymentId"), "branch": branch})
+    return deployment
+
+
+async def _trigger_deploy(payload: DeployWorkspaceRequest, meta: dict, repo_url: str, branch: str) -> dict:
     return await vercel_service.trigger_deployment(
         branch=branch,
         repo_url=repo_url,

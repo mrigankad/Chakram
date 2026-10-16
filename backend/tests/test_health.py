@@ -46,7 +46,7 @@ class _LLM:
 def _settings(**overrides):
     values = {
         "GITHUB_TOKEN": "", "JIRA_DOMAIN": "", "JIRA_EMAIL": "", "JIRA_TOKEN": "", "VERCEL_TOKEN": "",
-        "SLACK_WEBHOOK_URL": "", "DATADOG_API_KEY": "", "OLLAMA_BASE_URL": "http://llm.test",
+        "SLACK_WEBHOOK_URL": "", "OLLAMA_BASE_URL": "http://llm.test",
         "OLLAMA_API_KEY": "sk-llm-secret", "OLLAMA_MODEL": "test-model", **overrides,
     }
     return patch.multiple(main.settings, **values)
@@ -65,7 +65,7 @@ async def test_ready_reports_mongo_llm_and_integrations_without_secrets(app_clie
     assert body["checks"]["mongo"] is True and body["checks"]["llm"] is True
     assert body["llm"] == {"reachable": True, "model": "test-model", "error": None}
     assert body["integrations"] == {
-        "github": True, "jira": False, "vercel": False, "slack": True, "datadog": False,
+        "github": True, "jira": False, "vercel": False, "slack": True,
     }
     assert body["integrations_context"] == "server"
     assert llm.requests == [("http://llm.test/api/tags", {"Authorization": "Bearer sk-llm-secret"})]

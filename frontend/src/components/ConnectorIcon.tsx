@@ -2,7 +2,7 @@ import { Plug, Slack } from "lucide-react";
 import PATHS from "@/components/connector-paths";
 import { cn } from "@/lib/utils";
 
-export type ConnectorId = "github" | "jira" | "vercel" | "ollama" | "slack" | "datadog";
+export type ConnectorId = "github" | "jira" | "vercel" | "ollama" | "slack";
 
 /**
  * Logo glyph for an integration, drawn in the current text colour so it works

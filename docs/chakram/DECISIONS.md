@@ -21,3 +21,19 @@ Short records. Status is Proposed until the owner confirms; the audit recommends
 ## ADR-5 Hide, don't delete, in Phase 0
 
 **Status:** Proposed. **Context:** The checklist says a deferred feature must be hidden or labelled, and the owner wants the product streamlined. **Decision:** Phase 0 changes `nav-config.ts` only: merged pages move under tabs, parked pages show when their connector is saved, Monitoring leaves the sidebar. Routes, backend modules and data stay. Deletion is a separate decision after one release cycle. **Consequences:** No data loss, no broken deep links, reversible in one commit.
+
+## ADR-6 A Project is the unit of the product
+
+**Status:** Decided (owner delegated). **Context:** The build half (App Studio) and the delivery half (requirements, tests, review, release, incidents) share a login and a database but no object; they meet through a URL typed by hand. **Decision:** Introduce a `projects` record (workspace, pack, repo, deployments, requirement, runs, connections). App Studio creates it; Push, Deploy and Test this app update it; the Pipeline page becomes the project view with Build → Verify → Review → Release → Operate stages that read it. Imported repositories are projects without a Build stage. **Consequences:** Release Gate scores the project's own test runs (Jira bugs optional); Dashboard lists projects; the blueprint's harness records (runs, leases, deployments) attach to the project later. See `PRODUCT_DIRECTION.md` §1.
+
+## ADR-7 One connector registry; a connector exists only for a feed it proves
+
+**Status:** Decided. **Context:** Five lists described connectors (settings service, env defaults, the Settings page, the sidebar gating, readiness), none said what a connector enabled, and Datadog was configured for a push nobody read. **Decision:** `backend/app/services/connector_registry.py` is the only list: kind, secret fields, feeds (features it enables), pinned API version, and a read-only check. Settings, gating and readiness read it. A connector is added only with a feed and a check. Datadog is removed. Jira is narrowed to story import and write-back; Sprint analytics retire with the Sprint Health page. Slack is the first implementation of a `notify` interface. **Consequences:** `GET /orgs/current/connectors/status` and `POST …/{id}/check` exist; the Settings page shows what each connector enables and whether the saved credential works; new connectors are one registry entry plus one service module. See `PRODUCT_DIRECTION.md` §2.
+
+## ADR-8 Operate reads the deployed app's own health before any metrics vendor
+
+**Status:** Decided. **Context:** Monitoring was a demo page and Datadog had no reader. **Decision:** The Operate stage of a project polls the deployed app's `/api/health` and `/api/ready` (every API kit has them) and the deployment's state; incidents link to the project. A metrics vendor is added only when a project needs it, through the registry. **Consequences:** Monitoring's z-score and projection functions are kept for a real series source; the demo generator is not exposed in the product.
+
+## ADR-9 Order of the next slices
+
+**Status:** Decided. Connector registry (1) → Project record (2) → Project view (3) → write paths in composed apps (4) → Chakram wears the pack (5) → Jira narrowed, Sprint retired (6) → provider registry (7) → durable runs (8) → cleanup (9). Rationale in `PRODUCT_DIRECTION.md` §3.

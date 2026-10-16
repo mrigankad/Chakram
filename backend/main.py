@@ -51,6 +51,7 @@ from app.routes import auth as auth_router
 from app.routes import webhooks as webhooks_router
 from app.routes import organizations as organizations_router
 from app.routes import activity as activity_router
+from app.routes import projects as projects_router
 from app.services import organization_service
 from app.services import activity_history_service
 import httpx
@@ -71,6 +72,11 @@ async def _ensure_indexes_and_seed() -> None:
         await ensure_indexes(get_db())
     except Exception as exc:
         print(f"[DB] baseline index creation failed (non-fatal): {exc}")
+    try:
+        from app.services import project_service
+        await project_service.ensure_indexes(get_db())
+    except Exception as exc:
+        print(f"[DB] project index creation failed (non-fatal): {exc}")
     try:
         from app.services import design_pack_service
         await design_pack_service.ensure_indexes(get_db())
@@ -279,6 +285,7 @@ app.include_router(organizations_router.router, prefix=API_PREFIX)
 
 # Activity / search / repo-probe history (server-side, org-scoped)
 app.include_router(activity_router.router, prefix=API_PREFIX)
+app.include_router(projects_router.router, prefix=API_PREFIX)
 
 
 @app.get("/api", tags=["Health"])
@@ -368,13 +375,11 @@ async def ready(request: Request):
 
     jira = resolved("jira")
     vercel = resolved("vercel")
-    datadog = resolved("datadog")
     integrations = {
         "github": bool(resolved("github").get("token")),
         "jira": all((jira.get(k) or "").strip() for k in ("domain", "email", "token")),
         "vercel": bool(vercel.get("token")),
         "slack": bool(resolved("slack").get("webhook_url")),
-        "datadog": bool(datadog.get("api_key")),
     }
 
     return {

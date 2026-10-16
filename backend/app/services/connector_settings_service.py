@@ -50,10 +50,9 @@ SECRET_FIELDS = {
     "vercel": {"token"},
     "ollama": {"api_key"},
     "slack": {"webhook_url"},
-    "datadog": {"api_key", "app_key"},
 }
 
-CONNECTOR_KEYS = ("github", "jira", "vercel", "ollama", "slack", "datadog")
+CONNECTOR_KEYS = ("github", "jira", "vercel", "ollama", "slack")
 
 
 def _mask(value: str | None) -> dict[str, Any]:
@@ -86,10 +85,6 @@ def _env_defaults() -> dict[str, dict[str, str]]:
             "model": settings.OLLAMA_MODEL or "",
         },
         "slack": {"webhook_url": getattr(settings, "SLACK_WEBHOOK_URL", "") or ""},
-        "datadog": {
-            "api_key": getattr(settings, "DATADOG_API_KEY", "") or "",
-            "app_key": getattr(settings, "DATADOG_APP_KEY", "") or "",
-        },
     }
 
 

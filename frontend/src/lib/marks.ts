@@ -219,7 +219,7 @@ export const KPI_MARKS: Partial<Record<KpiKey, MarkId>> = {
   verdictConditional: "mark-verdict-conditional",
 };
 
-export type IntegrationKey = "github" | "jira" | "vercel" | "slack" | "datadog" | "ollama";
+export type IntegrationKey = "github" | "jira" | "vercel" | "slack" | "ollama";
 
 /** Connector to mark. These suggest what the integration does; none is a vendor logo. */
 export const INTEGRATION_MARKS: Partial<Record<IntegrationKey, MarkId>> = {
@@ -227,7 +227,6 @@ export const INTEGRATION_MARKS: Partial<Record<IntegrationKey, MarkId>> = {
   jira: "mark-int-issue-tracker",
   vercel: "mark-int-hosting",
   slack: "mark-int-chat-alerts",
-  datadog: "mark-int-observability",
   ollama: "mark-int-ai-model",
 };
 

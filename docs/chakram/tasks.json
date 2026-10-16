@@ -418,6 +418,90 @@
       ],
       "status": "todo",
       "files": []
+    },
+    {
+      "id": "T-100",
+      "phase": "P1",
+      "title": "Connector registry: feeds, pinned API versions, read-only checks; status + check endpoints; Datadog removed; Settings shows what each connector enables",
+      "depends_on": [],
+      "acceptance": [
+        "CON 01",
+        "OPS 01"
+      ],
+      "status": "done",
+      "files": [
+        "backend/app/services/connector_registry.py",
+        "backend/app/routes/organizations.py",
+        "frontend/src/pages/ConnectorsSettings.tsx"
+      ],
+      "evidence": "services/connector_registry.py (feeds, pinned API versions, read-only checks for ollama/github/vercel/jira/slack); GET /orgs/current/connectors/status, POST \u2026/{id}/check; Datadog removed everywhere; Settings shows 'Enables' + API version + Check connection; Incidents gated on Slack. tests/test_connector_registry.py"
+    },
+    {
+      "id": "T-110",
+      "phase": "P2",
+      "title": "Project record: projects collection; App Studio creates; push/deploy/test update; GET /projects; Dashboard lists projects",
+      "depends_on": [
+        "T-100"
+      ],
+      "acceptance": [
+        "OPS 01"
+      ],
+      "status": "done",
+      "files": [
+        "backend/app/services/project_service.py",
+        "backend/app/routes/projects.py"
+      ],
+      "evidence": "services/project_service.py + routes/projects.py: projects collection, created with the workspace, repo on push, deployment on deploy, requirement on Test this app, name/status/spec summary from the build; GET /projects, GET /projects/{id} with Build/Verify/Review/Release/Operate stage statuses computed from stored runs; POST /projects/import for repositories. tests/test_projects.py. Dashboard list UI not done"
+    },
+    {
+      "id": "T-120",
+      "phase": "P3",
+      "title": "Project view: Pipeline page reads the project; Build/Verify/Review/Release/Operate stages; Release Gate scores the project's own runs; Operate pings deployed app health",
+      "depends_on": [
+        "T-110"
+      ],
+      "acceptance": [
+        "REL 03",
+        "REL 06"
+      ],
+      "status": "todo",
+      "files": [
+        "frontend/src/pages/SDLCPipeline.tsx",
+        "backend/app/routes/release_gate.py"
+      ]
+    },
+    {
+      "id": "T-130",
+      "phase": "P4",
+      "title": "Write paths in composed apps: form and detail blocks, api client use, spec-derived create/edit cases; issue-tracker journey against the API kit",
+      "depends_on": [],
+      "acceptance": [
+        "BE 01",
+        "BE 02",
+        "BE 03",
+        "BE 04"
+      ],
+      "status": "todo",
+      "files": [
+        "backend/app/engines/spec.py",
+        "backend/app/engines/composer.py"
+      ]
+    },
+    {
+      "id": "T-140",
+      "phase": "P6",
+      "title": "Jira narrowed to story import + write-back; Sprint Health and DORA endpoints removed; Release Gate Jira signal optional",
+      "depends_on": [
+        "T-120"
+      ],
+      "acceptance": [
+        "CON 01"
+      ],
+      "status": "todo",
+      "files": [
+        "backend/app/routes/jira.py",
+        "backend/app/routes/sprint.py"
+      ]
     }
   ]
 }

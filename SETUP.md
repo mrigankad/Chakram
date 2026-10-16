@@ -80,7 +80,6 @@ cp .env.example .env
 | `VERCEL_TOKEN` / `VERCEL_TEAM_ID` / `VERCEL_PROJECT_ID` / `VERCEL_PROJECT_NAME` | Deployment status routes | |
 | `JIRA_DOMAIN` / `JIRA_EMAIL` / `JIRA_TOKEN` | Jira integration | |
 | `SLACK_WEBHOOK_URL` | Slack notifications | |
-| `DATADOG_API_KEY` / `DATADOG_APP_KEY` | Monitoring integration | |
 | `CORS_ORIGINS` | Always | Already includes `localhost:8081` (Vite dev server). |
 
 > **Security note:** `app/config.py` currently ships hardcoded fallback values for several of the

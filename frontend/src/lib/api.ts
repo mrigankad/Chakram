@@ -72,9 +72,34 @@ export type ConnectorsPublic = {
   vercel?: Record<string, unknown>;
   ollama?: Record<string, unknown>;
   slack?: Record<string, unknown>;
-  datadog?: Record<string, unknown>;
   updated_at?: string;
 };
+
+export type ConnectorStatusId = "github" | "jira" | "vercel" | "ollama" | "slack";
+
+/** Result of one live probe of a connector (POST /orgs/current/connectors/{id}/check). */
+export interface ConnectorCheck {
+  ok: boolean;
+  message: string;
+  checked_at: string;
+}
+
+/** One row of GET /orgs/current/connectors/status: what the connector feeds and whether it is set. */
+export interface ConnectorStatus {
+  id: ConnectorStatusId;
+  name: string;
+  kind: "model" | "source" | "deploy" | "tracker" | "notify";
+  configured: boolean;
+  /** Where the resolved credential comes from; null when nothing is set. */
+  source: "org" | "env" | null;
+  /** Features that read this connector. */
+  feeds: { id: string; label: string }[];
+  /** The service API version the backend pins. */
+  api_version: string;
+  last_check: ConnectorCheck | null;
+}
+
+export const CONNECTOR_STATUS_QUERY_KEY = ["org", "connectors", "status"] as const;
 
 /** An installable design system for generated apps (`src/design/*`): the built-in Chronos pack or one the org uploaded. */
 export interface DesignPack {
@@ -1464,6 +1489,11 @@ export const api = {
   /** Connector name → fields to save; `clear` lists saved values to remove, e.g. {github: ["token"]}. */
   putConnectors: (body: Record<string, Record<string, string | string[]>>) =>
     apiClient.put<ConnectorsPublic>("/orgs/current/connectors", body).then((r) => r.data),
+  getConnectorStatus: () =>
+    apiClient.get<{ connectors: ConnectorStatus[] }>("/orgs/current/connectors/status").then((r) => r.data.connectors),
+  /** Probes the service with the resolved credentials; a failed probe is `ok: false` with a readable message. */
+  checkConnector: (id: ConnectorStatusId) =>
+    apiClient.post<ConnectorCheck>(`/orgs/current/connectors/${id}/check`).then((r) => r.data),
 
   executeTestSelection: (id: string, targetUrl: string) =>
     apiClient.post<{ run_id: string; status: string; test_count: number }>(
@@ -1480,7 +1510,7 @@ export const api = {
   simulateTimeSeries: (baseline: Record<string, number>, days?: number) =>
     apiClient.post("/monitoring/simulate-time-series", { baseline, days }).then((r) => r.data),
 
-  /** `demo` marks the built-in demo series, so the server never alerts Slack or Datadog for it. */
+  /** `demo` marks the built-in demo series, so the server never alerts Slack for it. */
   analyzeTimeSeries: (series: any[], demo = false) =>
     apiClient.post("/monitoring/analyze", { series, demo }).then((r) => r.data),
 

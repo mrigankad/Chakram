@@ -151,7 +151,7 @@ Open [http://localhost:8081](http://localhost:8081) — Vite proxies `/api` to t
 | `WORKOS_*` | Auth | WorkOS API key, client ID, redirect URI, webhook secret |
 | `FRONTEND_URL` / `CORS_ORIGINS` | Prod | Frontend origin(s) for cookies and CORS |
 | `GITHUB_TOKEN` | Optional | Private repos & higher rate limits |
-| `JIRA_*` / `VERCEL_*` / `SLACK_*` / `DATADOG_*` | Optional | Integrations |
+| `JIRA_*` / `VERCEL_*` / `SLACK_*` | Optional | Integrations |
 
 Full templates: `backend/.env.example`, `backend/.env.azure.example`.
 

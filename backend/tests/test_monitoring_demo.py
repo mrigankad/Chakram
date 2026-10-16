@@ -21,7 +21,6 @@ def _notifiers():
     return (
         patch.object(monitoring, "generate_predictive_alert", new=AsyncMock(return_value=ALERT)),
         patch.object(monitoring.slack_service, "send_critical_anomaly", new=AsyncMock(return_value=True)),
-        patch.object(monitoring.datadog_service, "tag_dataset_analysis", new=AsyncMock(return_value={})),
     )
 
 
@@ -43,10 +42,10 @@ async def test_simulated_series_is_marked_demo_on_the_response_and_every_point(c
     assert len(body["series"]) == 30 and all(point["demo"] is True for point in body["series"])
 
 
-async def test_analysing_the_demo_series_sends_no_slack_or_datadog_notification(client):
+async def test_analysing_the_demo_series_sends_no_slack_notification(client):
     demo = (await client.post("/api/monitoring/simulate-time-series", json={"baseline": {}})).json()
-    alert, slack, datadog = _notifiers()
-    with alert, slack as slack_mock, datadog as datadog_mock:
+    alert, slack = _notifiers()
+    with alert, slack as slack_mock:
         # What the UI does today: post the series back as it received it.
         echoed = (await client.post("/api/monitoring/analyze", json={"series": demo["series"]})).json()
         # And with the explicit flag on unmarked points.
@@ -56,25 +55,22 @@ async def test_analysing_the_demo_series_sends_no_slack_or_datadog_notification(
     assert echoed["demo"] is True and flagged["demo"] is True
     assert echoed["anomaly_count"] >= 1  # the analysis itself still runs
     slack_mock.assert_not_awaited()
-    datadog_mock.assert_not_awaited()
 
 
 async def test_a_real_series_still_notifies(client):
-    alert, slack, datadog = _notifiers()
-    with alert, slack as slack_mock, datadog as datadog_mock:
+    alert, slack = _notifiers()
+    with alert, slack as slack_mock:
         body = (await client.post("/api/monitoring/analyze", json={"series": _real_series()})).json()
 
     assert body["demo"] is False
     assert any(a["severity"] == "critical" for a in body["anomalies"])
     slack_mock.assert_awaited_once()
-    datadog_mock.assert_awaited_once()
-    assert datadog_mock.await_args.kwargs["quality_score"] == 75.75
 
 
 async def test_a_dimension_missing_from_the_series_is_not_scored_as_zero(client):
     series = [{k: v for k, v in p.items() if k != "consistency"} for p in _real_series()]
-    alert, slack, datadog = _notifiers()
-    with alert, slack, datadog:
+    alert, slack = _notifiers()
+    with alert, slack:
         body = (await client.post("/api/monitoring/analyze", json={"series": series})).json()
     assert body["anomalies"] and all(a["dimension"] != "consistency" for a in body["anomalies"])
 

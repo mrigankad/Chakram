@@ -165,6 +165,9 @@ async def test_ai_ide_workspace_without_files_is_410(app_client, db, ide_root):
 
     await _login(app_client, db)
     ws_id = (await app_client.post("/api/ai-ide/workspace/create")).json()["workspace_id"]
+    # An app whose disk copy is gone is restored from MongoDB; only one with no stored files is lost.
+    await ai_ide_service.flush_pending()
+    await db[ai_ide_service.FILES].delete_many({"workspace_id": ws_id})
     ai_ide_service._workspaces.clear()
     ai_ide_service._workspace_meta.clear()
     shutil.rmtree(ide_root / ws_id)

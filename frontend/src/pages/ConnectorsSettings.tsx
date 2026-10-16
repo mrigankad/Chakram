@@ -4,6 +4,7 @@ import { ConnectorIcon, type ConnectorId } from "@/components/ConnectorIcon";
 import { ErrorText } from "@/components/ErrorText";
 import { StatusBadge } from "@/components/imcc/StatusBadge";
 import { Eye, EyeOff, Loader2, Palette, Upload } from "lucide-react";
+import { enablesLine } from "@/lib/connector-status";
 import { PageShell } from "@/components/PageShell";
 import { PageHeader } from "@/components/PageHeader";
 import { Panel } from "@/components/imcc/Panel";
@@ -13,7 +14,14 @@ import { Label } from "@/components/ui/label";
 import { useAskDialog } from "@/components/ui/ask-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ORG_CONNECTORS_QUERY_KEY } from "@/hooks/use-org-connectors";
-import { DESIGN_PACKS_QUERY_KEY, api, type ConnectorsPublic, type DesignPack } from "@/lib/api";
+import {
+  CONNECTOR_STATUS_QUERY_KEY,
+  DESIGN_PACKS_QUERY_KEY,
+  api,
+  type ConnectorStatus,
+  type ConnectorsPublic,
+  type DesignPack,
+} from "@/lib/api";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api-error";
 
@@ -23,14 +31,25 @@ function Section({
   id,
   title,
   configured,
+  status,
   children,
 }: {
   id: ConnectorId;
   title: string;
   /** Whether a credential is saved for this organization or supplied by the server. */
   configured: boolean;
+  /** What the connector feeds and its last probe, from GET /orgs/current/connectors/status; absent when that call failed. */
+  status?: ConnectorStatus;
   children: React.ReactNode;
 }) {
+  const queryClient = useQueryClient();
+  const check = useMutation({
+    mutationFn: () => api.checkConnector(id),
+    onError: (e) => toast.error(`${title} could not be checked`, { description: apiErrorMessage(e) }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: CONNECTOR_STATUS_QUERY_KEY }),
+  });
+  const result = check.data ?? status?.last_check ?? null;
+  const enables = status ? enablesLine(status) : "";
   return (
     <Panel padded={false}>
       <header className="flex h-11 items-center justify-between gap-3 border-b border-stroke-muted px-4">
@@ -40,6 +59,39 @@ function Section({
         </span>
         <StatusBadge tone={configured ? "success" : "neutral"}>{configured ? "Connected" : "Not set"}</StatusBadge>
       </header>
+      {status && (
+        <div className="space-y-2 border-b border-stroke-muted px-4 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <p className="min-w-0 truncate text-[11px] text-ink-quaternary">
+              {enables || "Enables: nothing yet"}
+              {status.api_version && (
+                <>
+                  {" · "}
+                  <span className="font-mono">API {status.api_version}</span>
+                </>
+              )}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 gap-1.5 text-xs"
+              disabled={check.isPending}
+              onClick={() => check.mutate()}
+            >
+              {check.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {check.isPending ? "Checking…" : "Check connection"}
+            </Button>
+          </div>
+          {result && (
+            <p className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-ink-secondary">
+              <StatusBadge tone={result.ok ? "success" : "critical"}>{result.ok ? "Working" : "Failed"}</StatusBadge>
+              <span className="min-w-0 flex-1 truncate" title={result.message}>{result.message}</span>
+              <span className="shrink-0 text-[11px] text-ink-quaternary">{new Date(result.checked_at).toLocaleString()}</span>
+            </p>
+          )}
+        </div>
+      )}
       <div className="space-y-3 p-4">{children}</div>
     </Panel>
   );
@@ -362,8 +414,17 @@ export default function ConnectorsSettings() {
     vercel: { token: "", team_id: "", project_id: "", project_name: "" },
     ollama: { base_url: "", api_key: "", model: "" },
     slack: { webhook_url: "" },
-    datadog: { api_key: "", app_key: "" },
   });
+
+  // What each connector feeds and its last probe. A failure just hides that line.
+  const statusQuery = useQuery({
+    queryKey: CONNECTOR_STATUS_QUERY_KEY,
+    queryFn: api.getConnectorStatus,
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+  const statusFor = (id: ConnectorStatus["id"]) => statusQuery.data?.find((s) => s.id === id);
+  const refreshStatus = () => void queryClient.invalidateQueries({ queryKey: CONNECTOR_STATUS_QUERY_KEY });
 
   useEffect(() => {
     void api
@@ -389,7 +450,6 @@ export default function ConnectorsSettings() {
             model: String(res.ollama?.model || ""),
           },
           slack: { webhook_url: "" },
-          datadog: { api_key: "", app_key: "" },
         });
       })
       .catch((e) => {
@@ -412,8 +472,8 @@ export default function ConnectorsSettings() {
         vercel: { ...d.vercel, token: "" },
         ollama: { ...d.ollama, api_key: "" },
         slack: { webhook_url: "" },
-        datadog: { api_key: "", app_key: "" },
       }));
+      refreshStatus();
       toast.success("Connectors saved", { description: "Changes apply to this organization immediately." });
     } catch (e) {
       toast.error("The connectors were not saved", { description: apiErrorMessage(e) });
@@ -431,6 +491,7 @@ export default function ConnectorsSettings() {
       setData(next);
       queryClient.setQueryData(ORG_CONNECTORS_QUERY_KEY, next);
       setDraft((d) => ({ ...d, [connector]: { ...d[connector], [field]: "" } }));
+      refreshStatus();
       toast.success(`Saved ${name} cleared`);
     } catch (e) {
       toast.error(`The ${name} was not cleared`, { description: apiErrorMessage(e) });
@@ -465,8 +526,6 @@ export default function ConnectorsSettings() {
   const vercelToken = data?.vercel?.token as SecretField | undefined;
   const ollamaKey = data?.ollama?.api_key as SecretField | undefined;
   const slackHook = data?.slack?.webhook_url as SecretField | undefined;
-  const ddKey = data?.datadog?.api_key as SecretField | undefined;
-  const ddApp = data?.datadog?.app_key as SecretField | undefined;
 
   const saveButton = (
     <Button onClick={() => void save()} disabled={saving} className="gap-2">
@@ -479,12 +538,12 @@ export default function ConnectorsSettings() {
     <PageShell>
       <PageHeader
         title="Connectors"
-        description="Credentials for GitHub, Jira, Vercel, Ollama, Slack and Datadog for this organization. Leave a secret blank to keep the saved value, or use Clear to remove it. Where the server supplies a value, it is used when nothing is saved here."
+        description="Credentials for GitHub, Jira, Vercel, Ollama and Slack for this organization. Leave a secret blank to keep the saved value, or use Clear to remove it. Where the server supplies a value, it is used when nothing is saved here."
         actions={saveButton}
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Section id="github" title="GitHub" configured={!!ghToken?.configured}>
+        <Section id="github" title="GitHub" configured={!!ghToken?.configured} status={statusFor("github")}>
           <SecretInput
             label="Token"
             name="GitHub token"
@@ -507,7 +566,7 @@ export default function ConnectorsSettings() {
           </div>
         </Section>
 
-        <Section id="ollama" title="Ollama" configured={!!ollamaKey?.configured}>
+        <Section id="ollama" title="Ollama" configured={!!ollamaKey?.configured} status={statusFor("ollama")}>
           <div className="space-y-1.5">
             <Label htmlFor="connector-field-2" className={fieldLabel}>Base URL</Label>
             <Input
@@ -539,7 +598,7 @@ export default function ConnectorsSettings() {
           </div>
         </Section>
 
-        <Section id="jira" title="Jira" configured={!!jiraToken?.configured}>
+        <Section id="jira" title="Jira" configured={!!jiraToken?.configured} status={statusFor("jira")}>
           <div className="space-y-1.5">
             <Label htmlFor="connector-field-4" className={fieldLabel}>Domain</Label>
             <Input
@@ -570,7 +629,7 @@ export default function ConnectorsSettings() {
           />
         </Section>
 
-        <Section id="vercel" title="Vercel" configured={!!vercelToken?.configured}>
+        <Section id="vercel" title="Vercel" configured={!!vercelToken?.configured} status={statusFor("vercel")}>
           <SecretInput
             label="Token"
             name="Vercel token"
@@ -608,7 +667,7 @@ export default function ConnectorsSettings() {
           </div>
         </Section>
 
-        <Section id="slack" title="Slack" configured={!!slackHook?.configured}>
+        <Section id="slack" title="Slack" configured={!!slackHook?.configured} status={statusFor("slack")}>
           <SecretInput
             label="Webhook URL"
             name="Slack webhook URL"
@@ -619,31 +678,6 @@ export default function ConnectorsSettings() {
             masked={slackHook?.masked}
             source={slackHook?.source}
             onChange={(v) => setDraft({ ...draft, slack: { webhook_url: v } })}
-          />
-        </Section>
-
-        <Section id="datadog" title="Datadog" configured={!!ddKey?.configured}>
-          <SecretInput
-            label="API key"
-            name="Datadog API key"
-            onClear={() => void clearSaved("datadog", "api_key", "Datadog API key")}
-            clearing={clearing === "datadog.api_key"}
-            value={draft.datadog.api_key}
-            configured={ddKey?.configured}
-            masked={ddKey?.masked}
-            source={ddKey?.source}
-            onChange={(v) => setDraft({ ...draft, datadog: { ...draft.datadog, api_key: v } })}
-          />
-          <SecretInput
-            label="App key"
-            name="Datadog app key"
-            onClear={() => void clearSaved("datadog", "app_key", "Datadog app key")}
-            clearing={clearing === "datadog.app_key"}
-            value={draft.datadog.app_key}
-            configured={ddApp?.configured}
-            masked={ddApp?.masked}
-            source={ddApp?.source}
-            onChange={(v) => setDraft({ ...draft, datadog: { ...draft.datadog, app_key: v } })}
           />
         </Section>
       </div>
