@@ -1,0 +1,563 @@
+{
+  "spec_version": 1,
+  "name": "Clinic Appointments",
+  "description": "Book and track appointments",
+  "entities": {
+    "Doctor": {
+      "label": "Doctor",
+      "fields": {
+        "id": {
+          "kind": "id",
+          "label": "ID",
+          "values": [],
+          "ref": ""
+        },
+        "name": {
+          "kind": "string",
+          "label": "Name",
+          "values": [],
+          "ref": ""
+        },
+        "speciality": {
+          "kind": "enum",
+          "label": "Speciality",
+          "values": [
+            "Cardiology",
+            "Dermatology",
+            "General"
+          ],
+          "ref": ""
+        },
+        "email": {
+          "kind": "email",
+          "label": "Email",
+          "values": [],
+          "ref": ""
+        }
+      }
+    },
+    "Appointment": {
+      "label": "Appointment",
+      "fields": {
+        "id": {
+          "kind": "id",
+          "label": "ID",
+          "values": [],
+          "ref": ""
+        },
+        "patient": {
+          "kind": "string",
+          "label": "Patient",
+          "values": [],
+          "ref": ""
+        },
+        "doctor": {
+          "kind": "ref",
+          "label": "Doctor",
+          "values": [],
+          "ref": "Doctor"
+        },
+        "start": {
+          "kind": "datetime",
+          "label": "Start",
+          "values": [],
+          "ref": ""
+        },
+        "status": {
+          "kind": "enum",
+          "label": "Status",
+          "values": [
+            "scheduled",
+            "done",
+            "cancelled"
+          ],
+          "ref": ""
+        },
+        "fee": {
+          "kind": "money",
+          "label": "Fee",
+          "values": [],
+          "ref": ""
+        },
+        "notes": {
+          "kind": "text",
+          "label": "Notes",
+          "values": [],
+          "ref": ""
+        },
+        "paid": {
+          "kind": "boolean",
+          "label": "Paid",
+          "values": [],
+          "ref": ""
+        },
+        "satisfaction": {
+          "kind": "percent",
+          "label": "Satisfaction",
+          "values": [],
+          "ref": ""
+        }
+      }
+    }
+  },
+  "pages": [
+    {
+      "path": "/",
+      "title": "Overview",
+      "component": "Overview",
+      "icon": "LayoutDashboard",
+      "mark": "mark-command",
+      "description": "Today at a glance",
+      "blocks": [
+        {
+          "type": "kpis",
+          "title": "",
+          "items": [
+            {
+              "label": "Appointments",
+              "metric": {
+                "fn": "count",
+                "entity": "Appointment",
+                "field": "",
+                "where": null
+              },
+              "format": "number",
+              "tone": "neutral"
+            },
+            {
+              "label": "Revenue",
+              "metric": {
+                "fn": "sum",
+                "entity": "Appointment",
+                "field": "fee",
+                "where": null
+              },
+              "format": "currency",
+              "tone": "neutral"
+            },
+            {
+              "label": "Done",
+              "metric": {
+                "fn": "count",
+                "entity": "Appointment",
+                "field": "",
+                "where": {
+                  "field": "status",
+                  "op": "eq",
+                  "value": "done"
+                }
+              },
+              "format": "number",
+              "tone": "success"
+            },
+            {
+              "label": "Avg satisfaction",
+              "metric": {
+                "fn": "avg",
+                "entity": "Appointment",
+                "field": "satisfaction",
+                "where": null
+              },
+              "format": "percent",
+              "tone": "neutral"
+            }
+          ],
+          "kind": "bar",
+          "series": [],
+          "group": null,
+          "format": "number",
+          "entity": "",
+          "columns": [],
+          "search": true,
+          "badge": "",
+          "sort_field": "",
+          "sort_dir": "desc",
+          "limit": 0,
+          "primary": "",
+          "secondary": "",
+          "metric": null,
+          "text": "",
+          "ratio": "1.4/1",
+          "children": [],
+          "name": "",
+          "description": ""
+        },
+        {
+          "type": "split",
+          "title": "",
+          "items": [],
+          "kind": "bar",
+          "series": [],
+          "group": null,
+          "format": "number",
+          "entity": "",
+          "columns": [],
+          "search": true,
+          "badge": "",
+          "sort_field": "",
+          "sort_dir": "desc",
+          "limit": 0,
+          "primary": "",
+          "secondary": "",
+          "metric": null,
+          "text": "",
+          "ratio": "1.4/1",
+          "children": [
+            {
+              "type": "chart",
+              "title": "Appointments per day",
+              "items": [],
+              "kind": "line",
+              "series": [
+                {
+                  "label": "Appointments",
+                  "metric": {
+                    "fn": "count",
+                    "entity": "Appointment",
+                    "field": "",
+                    "where": null
+                  }
+                },
+                {
+                  "label": "Revenue",
+                  "metric": {
+                    "fn": "sum",
+                    "entity": "Appointment",
+                    "field": "fee",
+                    "where": null
+                  }
+                }
+              ],
+              "group": {
+                "field": "start",
+                "by": "day"
+              },
+              "format": "number",
+              "entity": "",
+              "columns": [],
+              "search": true,
+              "badge": "",
+              "sort_field": "",
+              "sort_dir": "desc",
+              "limit": 0,
+              "primary": "",
+              "secondary": "",
+              "metric": null,
+              "text": "",
+              "ratio": "1.4/1",
+              "children": [],
+              "name": "",
+              "description": ""
+            },
+            {
+              "type": "barlist",
+              "title": "Top doctors",
+              "items": [],
+              "kind": "bar",
+              "series": [],
+              "group": {
+                "field": "doctor",
+                "by": "value"
+              },
+              "format": "number",
+              "entity": "Appointment",
+              "columns": [],
+              "search": true,
+              "badge": "",
+              "sort_field": "",
+              "sort_dir": "desc",
+              "limit": 5,
+              "primary": "",
+              "secondary": "",
+              "metric": {
+                "fn": "count",
+                "entity": "Appointment",
+                "field": "",
+                "where": null
+              },
+              "text": "",
+              "ratio": "1.4/1",
+              "children": [],
+              "name": "",
+              "description": ""
+            }
+          ],
+          "name": "",
+          "description": ""
+        },
+        {
+          "type": "table",
+          "title": "Recent appointments",
+          "items": [],
+          "kind": "bar",
+          "series": [],
+          "group": null,
+          "format": "number",
+          "entity": "Appointment",
+          "columns": [
+            "patient",
+            "doctor",
+            "start",
+            "status",
+            "fee",
+            "paid"
+          ],
+          "search": true,
+          "badge": "status",
+          "sort_field": "start",
+          "sort_dir": "desc",
+          "limit": 0,
+          "primary": "",
+          "secondary": "",
+          "metric": null,
+          "text": "",
+          "ratio": "1.4/1",
+          "children": [],
+          "name": "",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "path": "/doctors",
+      "title": "Doctors",
+      "component": "Doctors",
+      "icon": "Users",
+      "mark": "mark-command",
+      "description": "",
+      "blocks": [
+        {
+          "type": "grid",
+          "title": "",
+          "items": [],
+          "kind": "bar",
+          "series": [],
+          "group": null,
+          "format": "number",
+          "entity": "",
+          "columns": [],
+          "search": true,
+          "badge": "",
+          "sort_field": "",
+          "sort_dir": "desc",
+          "limit": 0,
+          "primary": "",
+          "secondary": "",
+          "metric": null,
+          "text": "",
+          "ratio": "1.4/1",
+          "children": [
+            {
+              "type": "chart",
+              "title": "By speciality",
+              "items": [],
+              "kind": "donut",
+              "series": [
+                {
+                  "label": "Doctors",
+                  "metric": {
+                    "fn": "count",
+                    "entity": "Doctor",
+                    "field": "",
+                    "where": null
+                  }
+                }
+              ],
+              "group": {
+                "field": "speciality",
+                "by": "value"
+              },
+              "format": "number",
+              "entity": "",
+              "columns": [],
+              "search": true,
+              "badge": "",
+              "sort_field": "",
+              "sort_dir": "desc",
+              "limit": 0,
+              "primary": "",
+              "secondary": "",
+              "metric": null,
+              "text": "",
+              "ratio": "1.4/1",
+              "children": [],
+              "name": "",
+              "description": ""
+            },
+            {
+              "type": "progress",
+              "title": "Appointments by status",
+              "items": [],
+              "kind": "bar",
+              "series": [],
+              "group": {
+                "field": "status",
+                "by": "value"
+              },
+              "format": "number",
+              "entity": "Appointment",
+              "columns": [],
+              "search": true,
+              "badge": "",
+              "sort_field": "",
+              "sort_dir": "desc",
+              "limit": 6,
+              "primary": "",
+              "secondary": "",
+              "metric": {
+                "fn": "count",
+                "entity": "Appointment",
+                "field": "",
+                "where": null
+              },
+              "text": "",
+              "ratio": "1.4/1",
+              "children": [],
+              "name": "",
+              "description": ""
+            },
+            {
+              "type": "list",
+              "title": "Latest",
+              "items": [],
+              "kind": "bar",
+              "series": [],
+              "group": null,
+              "format": "number",
+              "entity": "Appointment",
+              "columns": [],
+              "search": true,
+              "badge": "status",
+              "sort_field": "",
+              "sort_dir": "desc",
+              "limit": 6,
+              "primary": "patient",
+              "secondary": "fee",
+              "metric": null,
+              "text": "",
+              "ratio": "1.4/1",
+              "children": [],
+              "name": "",
+              "description": ""
+            }
+          ],
+          "name": "",
+          "description": ""
+        },
+        {
+          "type": "chart",
+          "title": "Revenue by doctor",
+          "items": [],
+          "kind": "bar",
+          "series": [
+            {
+              "label": "Revenue",
+              "metric": {
+                "fn": "sum",
+                "entity": "Appointment",
+                "field": "fee",
+                "where": null
+              }
+            }
+          ],
+          "group": {
+            "field": "doctor",
+            "by": "value"
+          },
+          "format": "currency",
+          "entity": "",
+          "columns": [],
+          "search": true,
+          "badge": "",
+          "sort_field": "",
+          "sort_dir": "desc",
+          "limit": 0,
+          "primary": "",
+          "secondary": "",
+          "metric": null,
+          "text": "",
+          "ratio": "1.4/1",
+          "children": [],
+          "name": "",
+          "description": ""
+        },
+        {
+          "type": "table",
+          "title": "Doctor",
+          "items": [],
+          "kind": "bar",
+          "series": [],
+          "group": null,
+          "format": "number",
+          "entity": "Doctor",
+          "columns": [
+            "name",
+            "speciality",
+            "email"
+          ],
+          "search": true,
+          "badge": "speciality",
+          "sort_field": "",
+          "sort_dir": "desc",
+          "limit": 0,
+          "primary": "",
+          "secondary": "",
+          "metric": null,
+          "text": "",
+          "ratio": "1.4/1",
+          "children": [],
+          "name": "",
+          "description": ""
+        },
+        {
+          "type": "panel",
+          "title": "Notes",
+          "items": [],
+          "kind": "bar",
+          "series": [],
+          "group": null,
+          "format": "number",
+          "entity": "",
+          "columns": [],
+          "search": true,
+          "badge": "",
+          "sort_field": "",
+          "sort_dir": "desc",
+          "limit": 0,
+          "primary": "",
+          "secondary": "",
+          "metric": null,
+          "text": "Seed data only; connect the API before go-live.",
+          "ratio": "1.4/1",
+          "children": [],
+          "name": "",
+          "description": ""
+        },
+        {
+          "type": "custom",
+          "title": "",
+          "items": [],
+          "kind": "bar",
+          "series": [],
+          "group": null,
+          "format": "number",
+          "entity": "",
+          "columns": [],
+          "search": true,
+          "badge": "",
+          "sort_field": "",
+          "sort_dir": "desc",
+          "limit": 0,
+          "primary": "",
+          "secondary": "",
+          "metric": null,
+          "text": "",
+          "ratio": "1.4/1",
+          "children": [],
+          "name": "ShiftPlanner",
+          "description": "A week grid of doctor shifts with a toggle per slot."
+        }
+      ]
+    }
+  ]
+}

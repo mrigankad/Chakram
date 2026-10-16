@@ -64,3 +64,18 @@ Checks: backend 648 passed / 1 skipped, frontend tsc clean, 525 vitest passed, p
 **Not done / limits**: fonts are Google links or `@font-face` data URLs in `pack.css` (no binary font upload, by design: app files are text). Chakram's own frontend does not yet load the org pack (T-030, Phase D2). No live build was run here.
 
 **Next task:** T-030 (Chakram frontend adopts kit token names and loads the org pack) or T-040 (app spec + composer), per the plan's order: T-040 is the larger token saving; T-030 is what makes "install Mahindra" re-skin Chakram itself.
+
+## 2026-10-16 — Phase B built: app spec and composer (T-040, T-041 done; T-042 partial)
+
+Checks: backend 664 passed / 1 skipped, frontend tsc clean, 525 vitest passed, `npm run check:composed` passes (the golden composed app type-checks against the real kit under `strict` + `noUnusedLocals`), production build passed.
+
+- **Spec** (`backend/app/engines/spec.py`): `name`, `entities` (fields: id, string, text, number, money, percent, boolean, date, datetime, email, url, `enum:a|b`, `ref:Entity`) and `pages` of blocks (`kpis`, `chart` line/area/bar/donut, `table`, `list`, `barlist`, `progress`, `panel`, `split`, `grid`, `custom`) bound to metrics (`count/sum/avg/min/max(Entity.field)` with `where`) and groups (by value/day/week/month). Normalisation repairs what it can (unknown fields and entities dropped from bindings, defaults derived, one `/` route, names made unique) and raises `SpecError` with the reason otherwise.
+- **Planner** (`planner.plan_spec`): one call with a ~0.9K-token system message that is the whole contract, one repair turn. `planner.seed_rows`: one call for realistic rows; the composer validates and coerces them (ids, enums, refs, dates, numbers) and completes short lists with plain rows, reporting that as a warning.
+- **Composer** (`backend/app/engines/composer.py`): writes `src/data/types.ts`, `src/data/queries.ts` (fixed generic helpers), `src/data/seed.ts`, one page per spec page and `app.spec.json`. Pages import only what they use; tables get typed columns with money/date/percent formatting, enum badges with tone by keyword, and ref lookups; charts bind to `series()`/`top()`.
+- **Run** (`ai_ide_generation`): `AI_IDE_COMPOSER` (default on). Order: spec → PLAN → seed → types/queries/seed written → custom components through the model (verified, retried once) → composed pages → routes. If no usable spec can be planned, the run says so and falls back to the per-file path. `GENERATION_DONE` carries `composed: true/false`.
+- **Cost for the five-page clinic fixture**: 1 spec call (~1.2K prompt tokens) + 1 seed call (~0.4K) + 0–2 custom blocks, versus 7 calls at ~34K before Phase A and ~14K after it. Pages are byte-reproducible from the spec.
+- **Evidence**: `tests/test_spec.py` (7), `tests/test_composer.py` (5, golden), `tests/test_generation_composed.py` (4: composed run, seed failure, fallback, flag off). CI step `check:composed`.
+
+**Not done**: structural edits in the Design tab do not recompose from the spec yet (text and class edits still write to the TSX, which keeps working). `app.spec.json` is written so that can be added without a format change. No live model run here; the first real build will show whether `kimi-k3:cloud` produces a valid spec on the first try (the repair turn and the fallback cover the failure modes).
+
+**Next task:** T-060 (API kit from entities: the spec's entities already carry what it needs) or T-030 (Chakram adopts the kit tokens). Suggested: T-060, since it completes the "same API every time" goal and the issue-tracker journey in the blueprint.

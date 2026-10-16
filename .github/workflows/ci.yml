@@ -33,6 +33,8 @@ jobs:
         run: npm run test
       - name: Build
         run: npm run build
+      - name: Composed app type-checks against the kit
+        run: npm run check:composed
       # The codebase still has known lint errors; report them without blocking merges.
       - name: Lint (non-blocking)
         continue-on-error: true

@@ -183,6 +183,13 @@ PID only. Do not touch Docker containers other than `aidlc-mongo`.
   WayamEye and Chronos) described by `backend/app/templates/marks_manifest.json`. Prompts get
   only the icons relevant to the app/page (`marks_service.relevant_marks`). Used icons are
   copied into an app on download and push.
+- **Composer** (`AI_IDE_COMPOSER`, default on): the planner emits an app spec
+  (`engines/spec.py`: entities with typed fields, pages of kit blocks bound to metrics),
+  one seed-data call fills the entities, and `engines/composer.py` writes `src/data/*`
+  and every page deterministically; only `custom` blocks go to the model. The spec is
+  saved as `app.spec.json`. When no usable spec can be planned the run falls back to
+  per-file generation. `backend/tests/golden/composed_app` is the composer's golden
+  output; `cd frontend && npm run check:composed` type-checks it against the kit (CI).
 - **Design packs** (`docs/chakram/DESIGN_PACKS.md`): a client's visual system as a zip
   (`pack.json`, `pack.css`, optional `README.md`, `brand/logo.svg`), validated and stored per
   org (`design_packs`), chosen when an app is created and installed under `src/design/`.

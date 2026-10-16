@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:composed": "node scripts/check-composed.mjs"
   },
   "dependencies": {
     "@babel/parser": "^7.29.2",

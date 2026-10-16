@@ -115,6 +115,10 @@ class Settings(BaseSettings):
 
     # PR Review Engine
     PR_REVIEW_V2_ENABLED: bool = True
+    # App Studio: plan a structured app spec and compose pages from the kit
+    # (one planner call + one seed call per app) instead of one model call per
+    # file. Falls back to per-file generation when a usable spec cannot be planned.
+    AI_IDE_COMPOSER: bool = True
     PR_REVIEW_MAX_FILES: int = 15
     PR_REVIEW_MAX_PATCH_CHARS: int = 3000
     PR_REVIEW_MAX_HUNKS_PER_FILE: int = 8

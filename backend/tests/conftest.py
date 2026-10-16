@@ -37,3 +37,15 @@ def _roomy_browser_slots(monkeypatch):
     from app.services import playwright_service
 
     monkeypatch.setattr(playwright_service, "_BROWSER_SLOTS", threading.BoundedSemaphore(10_000))
+
+
+@pytest.fixture(autouse=True)
+def _composer_off_by_default(monkeypatch):
+    """Generation tests exercise the per-file path unless they opt into the composer.
+
+    With the composer on, a run first asks the spec planner, which the older
+    tests do not fake; they would wait on a real provider before falling back.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "AI_IDE_COMPOSER", False)

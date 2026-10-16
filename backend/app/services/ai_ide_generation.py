@@ -20,11 +20,12 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.engines import kit
+from app.config import settings
+from app.engines import composer, kit
 from app.engines.generator import stream_file, strip_code_fences
 from app.engines.injector import inject_routes, nav_items
 from app.engines.plan_schema import PlanError, normalize_plan
-from app.engines.planner import plan_files
+from app.engines.planner import plan_files, plan_spec, seed_rows
 from app.engines.verify import verify_file
 from app.services import ai_ide_service
 
@@ -284,6 +285,57 @@ def _escape_html(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+async def _plan_legacy(run: GenerationRun, design_notes: str | None) -> tuple[list[dict], list[dict], Any] | None:
+    """(files, routes, plan) from the per-file planner; None after an emitted ERROR."""
+    emit = run.emit
+    try:
+        raw_plan = await asyncio.wait_for(
+            plan_files(run.idea, design_notes=design_notes, log_extra=run.log_extra, usage_sink=run.add_usage),
+            timeout=PLANNER_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        emit({"type": "ERROR", "message": f"Planner timed out after {int(PLANNER_TIMEOUT)}s. Try a shorter idea."})
+        return None
+    except Exception as exc:
+        emit({"type": "ERROR", "message": f"Planner error: {exc}"})
+        return None
+    # The planner already validated its own reply; a plan from anywhere else
+    # (an older planner, a test) goes through the same normalisation here.
+    try:
+        plan = normalize_plan(raw_plan)
+    except PlanError as exc:
+        emit({"type": "ERROR", "message": f"Planner returned an unusable plan: {exc}"})
+        return None
+    files_list = [f.model_dump() for f in plan.files]
+    routes_list = [r.model_dump() for r in plan.routes]
+    component_names = [
+        f["component_name"] for f in files_list
+        if f["path"].startswith("src/components/") and f.get("component_name")
+    ]
+    for file_spec in files_list:
+        if plan.color_theme:
+            file_spec["color_theme"] = plan.color_theme
+        file_spec["components"] = component_names
+    return files_list, routes_list, plan
+
+
+async def _plan_composed(run: GenerationRun, design_notes: str | None):
+    """The app spec from the spec planner, or None (with a STATUS) when it cannot be produced."""
+    try:
+        return await asyncio.wait_for(
+            plan_spec(run.idea, design_notes=design_notes, log_extra=run.log_extra, usage_sink=run.add_usage),
+            timeout=PLANNER_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        run.emit({"type": "STATUS", "message": "The spec planner timed out; generating file by file instead."})
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - the fallback path reports its own errors
+        logger.warning("[AI IDE] spec planning failed for %s: %s", run.workspace_id, exc)
+        run.emit({"type": "STATUS", "message": f"Could not plan an app spec ({exc}); generating file by file instead."})
+    return None
+
+
 async def _generate(run: GenerationRun) -> None:
     workspace_id = run.workspace_id
     emit = run.emit
@@ -294,61 +346,78 @@ async def _generate(run: GenerationRun) -> None:
         design_notes = ai_ide_service.read_file(workspace_id, "src/design/README.md")
     except Exception:  # noqa: BLE001 - an app without a pack has no notes
         design_notes = None
-    try:
-        raw_plan = await asyncio.wait_for(
-            plan_files(run.idea, design_notes=design_notes, log_extra=run.log_extra, usage_sink=run.add_usage),
-            timeout=PLANNER_TIMEOUT,
-        )
-    except asyncio.TimeoutError:
-        emit({"type": "ERROR", "message": f"Planner timed out after {int(PLANNER_TIMEOUT)}s. Try a shorter idea."})
-        return
-    except Exception as exc:
-        emit({"type": "ERROR", "message": f"Planner error: {exc}"})
-        return
 
-    # The planner already validated its own reply; a plan from anywhere else
-    # (an older planner, a test) goes through the same normalisation here.
-    try:
-        plan = normalize_plan(raw_plan)
-    except PlanError as exc:
-        emit({"type": "ERROR", "message": f"Planner returned an unusable plan: {exc}"})
-        return
+    pre_files: dict[str, str] = {}   # deterministic files written before the model's
+    post_files: dict[str, str] = {}  # deterministic files written after them (composed pages)
+    model_files: list[dict] = []     # file specs the model writes
+    spec = None
+    if settings.AI_IDE_COMPOSER and kit.has_kit():
+        spec = await _plan_composed(run, design_notes)
 
-    files_list: list[dict] = [f.model_dump() for f in plan.files]
-    routes_list: list[dict] = [r.model_dump() for r in plan.routes]
+    if spec is not None:
+        app_name, description = spec.name, spec.description
+        plan_dict = spec.to_plan_dict()
+        routes_list = plan_dict["routes"]
+        files_order = [f["path"] for f in plan_dict["files"]]
+        model_files = [composer.custom_component_spec(page, block, spec) for page, block in spec.custom_blocks()]
+        emit({"type": "PLAN", "app_name": app_name, "description": description, "files": files_order, "routes": routes_list})
+        emit({"type": "STATUS", "message": f"Spec ready: {len(spec.entities)} entities, {len(spec.pages)} pages. Writing seed data…"})
+        raw_rows: Any = {}
+        try:
+            raw_rows = await asyncio.wait_for(
+                seed_rows(spec, log_extra=run.log_extra, usage_sink=run.add_usage), timeout=FILE_TIMEOUT
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - plain rows are better than no app
+            logger.warning("[AI IDE] seed data failed for %s: %s", workspace_id, exc)
+            emit({"type": "STATUS", "message": f"Seed data could not be generated ({exc}); using plain placeholder rows."})
+        rows, seed_warnings = composer.coerce_seed(spec, raw_rows)
+        for warning in seed_warnings:
+            run.warnings.append({"path": "src/data/seed.ts", "problems": [warning]})
+        composed = composer.compose(spec, rows)
+        for path in ("app.spec.json", "src/data/types.ts", "src/data/queries.ts", "src/data/seed.ts"):
+            pre_files[path] = composed[path]
+        for page in spec.pages:
+            path = f"src/pages/{page.component}.tsx"
+            post_files[path] = composed[path]
+    else:
+        planned = await _plan_legacy(run, design_notes)
+        if planned is None:
+            return
+        model_files, routes_list, plan = planned
+        app_name, description = plan.app_name, plan.description
+        emit({"type": "PLAN", "app_name": app_name, "description": description,
+              "files": [f["path"] for f in model_files], "routes": routes_list})
+        emit({"type": "STATUS", "message": f"Plan ready: generating {len(model_files)} file(s)…"})
 
-    # Every file knows the app it belongs to, so each prompt carries the same name and look.
-    app_name = plan.app_name
-    color_theme = plan.color_theme
-    component_names = [
-        f["component_name"] for f in files_list
-        if f["path"].startswith("src/components/") and f.get("component_name")
-    ]
-    for file_spec in files_list:
+    # Every model-written file knows the app it belongs to, so each prompt carries the same name and look.
+    for file_spec in model_files:
         if app_name:
             file_spec["app_name"] = app_name
-        if color_theme:
-            file_spec["color_theme"] = color_theme
-        # So the Navbar links to real routes and pages import components that exist.
         file_spec["routes"] = routes_list
-        file_spec["components"] = component_names
+        file_spec.setdefault("components", [])
         file_spec["usage_sink"] = run.add_usage
         file_spec["log_extra"] = run.log_extra
 
     if app_name:
         await _note(workspace_id, name=app_name)
-    emit({
-        "type": "PLAN",
-        "app_name": app_name,
-        "description": plan.description,
-        "files": [f["path"] for f in files_list],
-        "routes": routes_list,
-    })
-    emit({"type": "STATUS", "message": f"Plan ready: generating {len(files_list)} file(s)…"})
-
-    if app_name:
         for path, content in _personalize(workspace_id, app_name):
             emit({"type": "FILE_UPDATE", "path": path, "content": content})
+
+    await _build(run, pre_files, model_files, post_files, routes_list, app_name)
+
+
+async def _build(
+    run: GenerationRun,
+    pre_files: dict[str, str],
+    model_files: list[dict],
+    post_files: dict[str, str],
+    routes_list: list[dict],
+    app_name: str,
+) -> None:
+    workspace_id = run.workspace_id
+    emit = run.emit
 
     def _wire_routes(done_modules: set[str], final: bool = False) -> None:
         """Point App.tsx at the pages generated so far; a failure here is reported, not fatal.
@@ -371,15 +440,30 @@ async def _generate(run: GenerationRun) -> None:
     failed_files: list[dict] = []
     generated_modules: set[str] = set()
     routed_modules = {route_module(r["importPath"]) for r in routes_list}
-    planned_paths = {f["path"] for f in files_list}
+    planned_paths = {f["path"] for f in model_files} | set(pre_files) | set(post_files)
     known_files: set[str] = set(kit.kit_files()) | set(_TEMPLATE_FILES)
     kit_exports = set(kit.kit_exports()) if kit.has_kit() else None
+    total = len(model_files) + len(pre_files) + len(post_files)
 
     # The app's name and full navigation are known from the plan: show them right away.
     _wire_routes(generated_modules)
 
     # Shared code written so far, shown to later prompts so pages match it.
     written_context: dict[str, str] = {}
+
+    def _write_fixed(path: str, content: str) -> None:
+        """A composed file: no model, no retry; written and announced as one update."""
+        emit({"type": "FILE_CREATE", "path": path})
+        ai_ide_service.save_file(workspace_id, path, content)
+        emit({"type": "FILE_UPDATE", "path": path, "content": content})
+        emit({"type": "FILE_DONE", "path": path})
+        known_files.add(path)
+        if path.startswith("src/data/") or path.startswith("src/components/"):
+            written_context[path] = content
+        module = route_module(path)
+        generated_modules.add(module)
+        if module in routed_modules:
+            _wire_routes(generated_modules)
 
     async def _attempt(file_spec: dict, path: str) -> tuple[str, str, str | None]:
         """One model call: (cleaned content, raw streamed text, error)."""
@@ -471,9 +555,12 @@ async def _generate(run: GenerationRun) -> None:
         if module in routed_modules:
             _wire_routes(generated_modules)
 
+    for path, content in pre_files.items():
+        _write_fixed(path, content)
+
     # Shared files first, one at a time (later ones may import earlier ones) ...
-    shared = [f for f in files_list if not f["path"].startswith("src/pages/")]
-    pages = [f for f in files_list if f["path"].startswith("src/pages/")]
+    shared = [f for f in model_files if not f["path"].startswith("src/pages/")]
+    pages = [f for f in model_files if f["path"].startswith("src/pages/")]
     for file_spec in shared:
         await _generate_one(file_spec)
 
@@ -486,18 +573,22 @@ async def _generate(run: GenerationRun) -> None:
 
     await asyncio.gather(*(_page(f) for f in pages))
 
+    for path, content in post_files.items():
+        _write_fixed(path, content)
+
     # Final pass leaves out routes (and menu entries) for files that were not generated.
     _wire_routes(generated_modules, final=True)
 
     emit({
         "type": "GENERATION_DONE",
-        "files_total": len(files_list),
-        "files_generated": len(files_list) - len(failed_files),
+        "files_total": total,
+        "files_generated": total - len(failed_files),
         "files_failed": len(failed_files),
         "failed_files": failed_files,
         "warnings": list(run.warnings),
         "usage": dict(run.usage),
         "run_id": run.run_id,
+        "composed": bool(post_files),
     })
 
 

@@ -283,11 +283,12 @@
       "acceptance": [
         "HAR 01"
       ],
-      "status": "todo",
+      "status": "done",
       "files": [
         "backend/app/engines/spec.py",
         "backend/app/engines/planner.py"
-      ]
+      ],
+      "evidence": "engines/spec.py: AppSpec (entities with typed fields, pages of 10 block types bound to metrics) with deterministic normalisation and SpecError; planner.plan_spec (one call + repair) and planner.seed_rows (one call); tests/test_spec.py"
     },
     {
       "id": "T-041",
@@ -299,11 +300,12 @@
       "acceptance": [
         "REL 02"
       ],
-      "status": "todo",
+      "status": "done",
       "files": [
         "backend/app/engines/composer/*",
         "backend/tests/test_composer_golden.py"
-      ]
+      ],
+      "evidence": "engines/composer.py renders types.ts, queries.ts, seed.ts (validated/coerced rows with fallback), one page per spec page, app.spec.json; tests/test_composer.py golden app under tests/golden/composed_app; frontend `npm run check:composed` type-checks it against the real kit in CI"
     },
     {
       "id": "T-042",
@@ -315,11 +317,12 @@
       "acceptance": [
         "OPS 01"
       ],
-      "status": "todo",
+      "status": "partial",
       "files": [
         "backend/app/services/ai_ide_generation.py",
         "frontend/src/lib/source-edit.ts"
-      ]
+      ],
+      "evidence": "custom blocks go through the model with the data files as context and are verified like any file; AI_IDE_COMPOSER (default on) with automatic fallback to per-file generation when no usable spec can be planned; tests/test_generation_composed.py. Spec-aware visual edit (recompose on structural edit) is NOT done: text/class edits still write back to the composed TSX as before"
     },
     {
       "id": "T-050",

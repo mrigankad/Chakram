@@ -183,3 +183,166 @@ async def plan_files(
 def validate_plan(raw: Any) -> AppPlan:
     """Validate a plan that did not come from `plan_files` (tests, imports)."""
     return normalize_plan(_strip_nav_files(dict(raw)) if isinstance(raw, dict) else raw, known_marks=_known_marks())
+
+
+# ── Spec planning (composer path) ────────────────────────────────────────────
+#
+# The spec is a checkable description of the app: entities with typed fields
+# and pages made of kit blocks bound to those entities. The composer renders
+# every page from it without a model call, so this one call replaces the
+# per-file prompts. The vocabulary below is the whole contract.
+
+_SPEC_SYSTEM = """\
+You are a senior product architect. Describe a web app as a JSON spec only. Pages are composed from a fixed UI kit
+(Chronos: sidebar app shell, KPI tiles, panels, charts, tables, lists) by a program; you decide the data model and
+what each page shows, not the code.
+
+Return ONLY valid JSON:
+{
+  "name": "Plain name of what it is (1-3 words, the client's language, no brand coinages)",
+  "description": "One sentence",
+  "entities": {
+    "Appointment": { "label": "Appointment", "fields": {
+      "patient": "string", "doctor": "ref:Doctor", "start": "datetime", "status": "enum:scheduled|done|cancelled",
+      "fee": "money", "notes": "text", "paid": "boolean", "satisfaction": "percent" } },
+    "Doctor": { "fields": { "name": "string", "speciality": "enum:Cardiology|General", "email": "email" } }
+  },
+  "pages": [
+    { "title": "Overview", "icon": "LayoutDashboard", "mark": "mark-command", "description": "One line", "blocks": [
+      { "type": "kpis", "items": [
+        { "label": "Appointments", "metric": "count(Appointment)" },
+        { "label": "Revenue", "metric": "sum(Appointment.fee)", "format": "currency" },
+        { "label": "Done", "metric": { "fn": "count", "entity": "Appointment", "where": { "field": "status", "op": "eq", "value": "done" } }, "tone": "success" } ] },
+      { "type": "split", "ratio": "1.4/1", "children": [
+        { "type": "chart", "kind": "line", "title": "Appointments per day", "series": [ { "label": "Appointments", "metric": "count(Appointment)" } ], "group": { "field": "start", "by": "day" } },
+        { "type": "barlist", "title": "Top doctors", "entity": "Appointment", "group": "doctor", "metric": "count(Appointment)", "limit": 5 } ] },
+      { "type": "table", "title": "Recent appointments", "entity": "Appointment", "columns": ["patient", "doctor", "start", "status", "fee"], "badge": "status", "sort": { "field": "start", "dir": "desc" } }
+    ] }
+  ]
+}
+
+Field kinds: id (added automatically), string, text, number, money, percent (fraction), boolean, date, datetime, email, url,
+"enum:a|b|c", "ref:EntityName" (holds the other entity's id).
+Metric: "fn(Entity)" or "fn(Entity.field)" with fn in count|sum|avg|min|max; the object form adds "where" {field, op in
+eq|neq|gt|gte|lt|lte|in, value}.
+Block types:
+- kpis: 2-5 items {label, metric, format: number|currency|percent, tone?: success|info|warning|error}.
+- chart: kind line|area (needs a date/datetime group with by day|week|month) or bar|donut (group by an enum/ref/string
+  field); 1-3 series {label, metric}; format.
+- table: entity, columns (field names), badge (an enum column), sort {field, dir}, search (default true), limit.
+- list: entity, primary (field), secondary (field), badge (enum field), limit — a compact recent-items list.
+- barlist / progress: entity, group (enum/ref/string field), metric, limit — ranked breakdown / completion bars.
+- panel: title, text — a short static note.
+- split (exactly 2 children, ratio 1.4/1|1/1.4|1.6/1|1/2) and grid (2-6 children) lay out the blocks above; no nesting beyond one level.
+- custom: name (PascalCase), description — ONLY for something the kit cannot express (a calendar grid, a map, a wizard).
+  Use it rarely: every custom block costs a model call and is less consistent.
+Rules: 2-5 entities with 4-9 fields each, realistic names in the client's language; 3-5 pages, the first is the overview;
+each page 2-5 blocks with varied layout (not the same shape every page); every page shows real metrics of the entities;
+"icon" is a lucide-react icon name; "mark" is one id from the 3D icon list.
+"""
+
+_SPEC_USER = """\
+User idea: {idea}
+{design_notes}
+3D icons:
+{marks}
+"""
+
+_SPEC_REPAIR_USER = """\
+Your previous spec was rejected: {reason}
+
+Return the corrected spec as JSON only, following every rule.
+
+User idea: {idea}
+{design_notes}
+3D icons:
+{marks}
+"""
+
+_SEED_SYSTEM = """\
+You write realistic seed data for a demo app. Reply with JSON only: an object with one key per entity holding an
+array of row objects. Use the exact field names given. Rows must be internally consistent: refs hold ids of rows you
+wrote for the referenced entity (ids are strings like "doctor-1"); dates are ISO strings spread over the last 45
+days; money is a number in whole currency units; percent is a fraction (0.42); enums use the listed values; names,
+titles and notes read like real records in the client's domain, never "Item 1" or lorem ipsum. No markdown.
+"""
+
+_SEED_USER = """\
+App: {name}. {description}
+
+Entities and fields:
+{entities}
+
+Write {per_entity} rows per entity (referenced entities first). Today is {today}.
+"""
+
+
+async def plan_spec(
+    idea: str,
+    *,
+    design_notes: str | None = None,
+    log_extra: dict | None = None,
+    usage_sink: Callable[[int, int], None] | None = None,
+) -> "AppSpec":
+    """A validated `AppSpec` for the idea; one repair turn, then `SpecError`."""
+    from app.engines.spec import SpecError, normalize_spec
+
+    idea = (idea or "").strip()
+    if len(idea) > MAX_IDEA_CHARS:
+        idea = idea[:MAX_IDEA_CHARS] + "\n[truncated]"
+    marks = kit.marks_catalog(idea, 60) or "(none available)"
+    known = _known_marks()
+    notes = (design_notes or "").strip()[:1500]
+    notes_block = f"\nDesign system notes (the client's look and vocabulary; follow them in names and labels):\n{notes}\n" if notes else ""
+    user = _SPEC_USER.format(idea=idea, marks=marks, design_notes=notes_block)
+    last_error: str | None = None
+    for attempt in range(2):
+        if attempt:
+            user = _SPEC_REPAIR_USER.format(reason=last_error, idea=idea, marks=marks, design_notes=notes_block)
+        raw = await _call_openai(
+            user, json_mode=True, task_name="AI IDE – Plan Spec", system=_SPEC_SYSTEM,
+            log_extra=log_extra, usage_sink=usage_sink,
+        )
+        try:
+            return normalize_spec(_parse_json_object(raw), known_marks=known)
+        except (SpecError, AIResponseError) as exc:
+            last_error = str(exc)
+            logger.warning("[Planner] spec attempt %d rejected: %s", attempt + 1, last_error)
+    raise SpecError(f"The planner could not produce a usable spec: {last_error}")
+
+
+def _entity_sheet(spec: "AppSpec") -> str:
+    lines = []
+    for name, ent in spec.entities.items():
+        parts = []
+        for fname, f in ent.fields.items():
+            if f.kind == "enum":
+                parts.append(f"{fname}: enum {'|'.join(f.values)}")
+            elif f.kind == "ref":
+                parts.append(f"{fname}: id of {f.ref}")
+            else:
+                parts.append(f"{fname}: {f.kind}")
+        lines.append(f"- {name}: " + ", ".join(parts))
+    return "\n".join(lines)
+
+
+async def seed_rows(
+    spec: "AppSpec",
+    *,
+    per_entity: int = 12,
+    today: str | None = None,
+    log_extra: dict | None = None,
+    usage_sink: Callable[[int, int], None] | None = None,
+) -> dict:
+    """The model's seed rows per entity (raw; the composer validates and completes them)."""
+    from datetime import date
+
+    user = _SEED_USER.format(
+        name=spec.name, description=spec.description, entities=_entity_sheet(spec),
+        per_entity=per_entity, today=today or date.today().isoformat(),
+    )
+    raw = await _call_openai(
+        user, json_mode=True, task_name="AI IDE – Seed Data", system=_SEED_SYSTEM,
+        log_extra=log_extra, usage_sink=usage_sink,
+    )
+    return _parse_json_object(raw)
