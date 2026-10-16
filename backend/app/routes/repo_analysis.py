@@ -21,7 +21,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPE
 from app.auth.dependencies import get_current_org
 from app.database import get_db
 from app.models.organization import OrganizationOut
-from app.models.repo_analysis import RepoAnalysisRequest
+from app.models.repo_analysis import ExecuteRequest, RepoAnalysisRequest
 from app.services import playwright_service, repo_service
 from app.services.analysis_runner import create_job, get_job, run_analysis, run_commit_analysis
 from app.services.execution_service import InvalidTargetError, validate_target_url
@@ -44,14 +44,19 @@ async def _require_fetchable_target(url: str) -> None:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-async def _check_url_reachable(url: str) -> str | None:
+async def _check_url_reachable(url: str, allow_insecure_tls: bool = False) -> str | None:
     """
     Try a GET request to url. Returns None if reachable, or a generic message if not.
     Times out after 8 seconds so we don't stall the request. The exception detail
     goes to the server log only.
+
+    TLS certificates are verified unless the request explicitly set
+    allow_insecure_tls (self-signed staging hosts), which is logged.
     """
+    if allow_insecure_tls:
+        log.warning("Pre-flight check %s with TLS verification disabled (allow_insecure_tls)", url)
     try:
-        async with httpx.AsyncClient(verify=False, follow_redirects=True) as client:
+        async with httpx.AsyncClient(verify=not allow_insecure_tls, follow_redirects=True) as client:
             resp = await client.get(url, timeout=8.0)
         log.info("Pre-flight check %s → HTTP %d", url, resp.status_code)
         return None  # reachable (even 4xx counts the server is up)
@@ -118,7 +123,7 @@ async def start_analyze(
     Poll GET /repo/jobs/{job_id} for progress + result.
     """
     await _require_fetchable_target(body.target_url)
-    reach_err = await _check_url_reachable(body.target_url)
+    reach_err = await _check_url_reachable(body.target_url, body.allow_insecure_tls)
     if reach_err:
         log.warning(
             "Target URL pre-flight warning: %s %s (continuing anyway)",
@@ -210,13 +215,20 @@ async def get_tests(
 async def execute_tests(
     analysis_id: str,
     background_tasks: BackgroundTasks,
+    body: ExecuteRequest | None = None,
     org: OrganizationOut = Depends(get_current_org),
     db=Depends(get_db),
 ):
     """
     Starts a Playwright execution run in the background.
     Returns run_id poll GET /repo/execution/{run_id} for live results.
+
+    The optional body carries the test account (test_email / test_password) that
+    fills the {{TEST_EMAIL}} / {{TEST_PASSWORD}} placeholders in the stored steps
+    at run time. The password is never stored; the email defaults to the one the
+    analysis was generated with.
     """
+    body = body or ExecuteRequest()
     analysis = await db.repo_analyses.find_one({"_id": analysis_id, "org_id": org.id})
     if not analysis:
         raise HTTPException(status_code=404, detail="Analysis not found")
@@ -224,7 +236,7 @@ async def execute_tests(
     # ── Pre-flight: verify the target URL is actually reachable ───────────────
     target_url: str = analysis["target_url"]
     await _require_fetchable_target(target_url)
-    reach_err = await _check_url_reachable(target_url)
+    reach_err = await _check_url_reachable(target_url, body.allow_insecure_tls)
     if reach_err:
         log.error("Pre-flight failed for %s: %s", target_url, reach_err)
         raise HTTPException(
@@ -255,6 +267,8 @@ async def execute_tests(
         analysis["target_url"],
         run_id,
         analysis_id,
+        test_email=body.test_email or analysis.get("test_email"),
+        test_password=body.test_password,
     )
 
     return {"run_id": run_id, "total": len(tests), "status": "started"}
@@ -340,6 +354,7 @@ async def execute_tests_direct(
     """
     tests = body.get("tests", [])
     target_url = body.get("target_url", "").strip()
+    allow_insecure_tls = body.get("allow_insecure_tls") is True
 
     if not tests:
         raise HTTPException(status_code=400, detail="tests list is required")
@@ -355,7 +370,7 @@ async def execute_tests_direct(
         )
 
     await _require_fetchable_target(target_url)
-    reach_err = await _check_url_reachable(target_url)
+    reach_err = await _check_url_reachable(target_url, allow_insecure_tls)
     if reach_err:
         raise HTTPException(
             status_code=400,
@@ -396,6 +411,8 @@ async def execute_tests_direct(
         target_url,
         run_id,
         analysis_id,
+        test_email=(body.get("test_email") or None),
+        test_password=(body.get("test_password") or None),
     )
 
     return {"run_id": run_id, "total": len(prepared), "status": "started"}

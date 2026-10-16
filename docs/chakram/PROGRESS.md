@@ -21,3 +21,30 @@ Revision `3c2dbb4`, branch `claude/dazzling-mendel-wckwjs`. Working tree: only `
 - No code changes beyond docs. Phase 0 repairs (T-001..T-004) are the next tasks.
 
 **Next task:** T-001 (GAP-01 redaction), then T-003 (sidebar streamlining), then Phase A (T-010..T-015).
+
+## 2026-10-16 — Phase 0 repairs and Phase A built (T-001..T-003, T-010..T-015 done)
+
+Working tree on `claude/dazzling-mendel-wckwjs`, on top of the audit commit. Checks: backend 635 passed / 1 skipped (`env -u GITHUB_TOKEN -u GH_TOKEN .venv/bin/python -m pytest -q`), frontend tsc clean, 517 vitest passed, production build passed. Lint unchanged (pre-existing errors only).
+
+**Security (Phase 0)**
+- GAP-01: test-site credentials never enter an LLM prompt. The repo-analysis prompts ask the model to write `{{TEST_EMAIL}}` / `{{TEST_PASSWORD}}`; `playwright_service._run_step` substitutes them in the browser and logs `<credential>`. A placeholder step in a run that has no account fails with a clear message instead of typing the placeholder. Re-runs from Root Cause and Test Selection still start without an account (follow-up noted in GAP-01).
+- GAP-02: commit-review PAT moved to the request body; App Studio's GitHub token is session-scoped.
+- GAP-03: target-URL pre-flight verifies TLS by default (`allow_insecure_tls` opt-in, logged). GAP-22: commit author from settings.
+
+**Sidebar (Phase 0, ADR-5)**
+- 13 default items; Test Suite tabs (Cases, Baseline, Selection, Root Cause, Repair, From Docs); CI Health / Sprint Health / Release Gate / Incidents appear only when their connector is configured; Monitoring, Code Impact and Requirement Insights are URL- and search-reachable only; Usage & Cost linked from the footer. No route or backend removed.
+
+**Generation (Phase A)**
+- Prompts: one system message per file role (role line + kit sheet + rules) and a user message with only the per-file facts. The data module gets no kit reference and no icon catalogue; the charts sheet is added only when the page blueprint names a chart. Measured on the same 5-page fixture: page prompt ≈ 8.6K chars (was ≈ 22K), data prompt ≈ 2.3K (was ≈ 17K), and the system prefix is byte-identical across the pages of a build.
+- Plan contract: `engines/plan_schema.normalize_plan` cleans paths, drops unsafe/duplicate files, derives component names and routes, guarantees one `/` route, validates marks and icons, caps pages at 8, and raises `PlanError` otherwise; the planner gets one repair turn with the reason. Ideas are capped at 12K chars.
+- Verification: `engines/verify.verify_file` runs before a file is saved (truncation, unterminated strings, fences, prose, default export, JSX in `.ts`, forbidden packages, unknown kit exports, missing local imports, page-imports-page). A failing file is regenerated once with the reasons; hard problems after that reject the file, soft ones keep it and report a warning. This is a structural check, not `tsc`; the container has no Node toolchain.
+- Context: an over-long shared file is shown as an export summary instead of a hard cut, so pages see every dataset name.
+- Usage: `GenerationRun` has a `run_id` and totals; `GENERATION_DONE` carries `usage`, `warnings`, `run_id`; `api_cost_logs` rows carry `workspace_id`, `run_id`, `path`. The detached log task no longer resets a ContextVar from another context.
+- Naming: `package.json` name and `<title>` are set from the plan's app name (GAP-18).
+- Drift: `tests/test_kit_reference.py` fails if the reference or a sheet names anything the kit does not export, if the stated kit version drifts, or if `preview-runtime.js` pins differ from `TEMPLATE_DEPENDENCIES`; `package.json` is rendered from that one list.
+
+**Not done**
+- No live model run (no Ollama here): the token figures are prompt sizes, not provider-reported usage. First real build will populate `api_cost_logs` with per-run totals.
+- `KIT_API.md` is kept as the human reference; prompts use the sheets.
+
+**Next task:** T-020 (extract the chronos design pack; `src/design/` in apps), then T-021/T-022.

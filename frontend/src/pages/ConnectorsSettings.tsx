@@ -9,6 +9,8 @@ import { Panel } from "@/components/imcc/Panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useQueryClient } from "@tanstack/react-query";
+import { ORG_CONNECTORS_QUERY_KEY } from "@/hooks/use-org-connectors";
 import { api, type ConnectorsPublic } from "@/lib/api";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api-error";
@@ -122,6 +124,7 @@ function SecretInput({
 }
 
 export default function ConnectorsSettings() {
+  const queryClient = useQueryClient();
   const [data, setData] = useState<ConnectorsPublic | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -174,6 +177,8 @@ export default function ConnectorsSettings() {
     try {
       const next = await api.putConnectors(draft);
       setData(next);
+      // The sidebar lists parked pages from this same view.
+      queryClient.setQueryData(ORG_CONNECTORS_QUERY_KEY, next);
       setDraft((d) => ({
         ...d,
         github: { ...d.github, token: "" },
@@ -198,6 +203,7 @@ export default function ConnectorsSettings() {
     try {
       const next = await api.putConnectors({ clear: { [connector]: [field] } });
       setData(next);
+      queryClient.setQueryData(ORG_CONNECTORS_QUERY_KEY, next);
       setDraft((d) => ({ ...d, [connector]: { ...d[connector], [field]: "" } }));
       toast.success(`Saved ${name} cleared`);
     } catch (e) {

@@ -66,7 +66,7 @@ function getRuntimeGithubToken(): string {
   if (typeof fromEnv === "string" && fromEnv.trim()) return fromEnv.trim();
 
   try {
-    const fromStorage = window.localStorage.getItem(RUNTIME_GITHUB_TOKEN_STORAGE_KEY);
+    const fromStorage = window.sessionStorage.getItem(RUNTIME_GITHUB_TOKEN_STORAGE_KEY);
     if (fromStorage && fromStorage.trim()) return fromStorage.trim();
   } catch {
     /* storage unavailable: no saved token */
@@ -849,21 +849,22 @@ function RightRail({
     const next = await askText({
       title: "GitHub token",
       description:
-        "Used to create a repository for this app and push to it, which deployment builds from. It is kept in this browser only.",
+        "Used to create a repository for this app and push to it, which deployment builds from. It is kept in this browser tab for this session only.",
       confirmLabel: "Save token",
       input: { label: "Personal access token (repo scope)", secret: true, placeholder: "ghp_…" },
     });
     if (!next) return null;
     let stored = true;
     try {
-      window.localStorage.setItem(RUNTIME_GITHUB_TOKEN_STORAGE_KEY, next);
+      // sessionStorage: the token does not outlive the browser session.
+      window.sessionStorage.setItem(RUNTIME_GITHUB_TOKEN_STORAGE_KEY, next);
     } catch {
       stored = false;
     }
     setGithubToken(next);
     toast.success(
       stored
-        ? "GitHub token saved in this browser."
+        ? "GitHub token saved for this browser session."
         : "GitHub token set for this session only; the browser refused to store it.",
     );
     return next;

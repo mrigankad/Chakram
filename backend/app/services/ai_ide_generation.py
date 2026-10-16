@@ -12,15 +12,20 @@ Runs live in this process, which is fine for the single-instance deployment;
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.engines import kit
 from app.engines.generator import stream_file, strip_code_fences
 from app.engines.injector import inject_routes, nav_items
+from app.engines.plan_schema import PlanError, normalize_plan
 from app.engines.planner import plan_files
+from app.engines.verify import verify_file
 from app.services import ai_ide_service
 
 logger = logging.getLogger(__name__)
@@ -30,6 +35,17 @@ FILE_TIMEOUT = 90.0
 _FINISHED_RUN_TTL = 30 * 60
 # Pages only depend on the shared files written before them, so several stream at once.
 PAGE_CONCURRENCY = 3
+# A file that fails the structural check is asked for once more, with the reasons.
+FILE_ATTEMPTS = 2
+# Problems that make a file unusable (it would not even parse) reject it; the
+# rest are reported as warnings and the file is kept, since the preview and the
+# client's repair step can still deal with them.
+_HARD_PROBLEMS = (
+    "empty", "truncated", "unexpected '", "unterminated", "markdown fence", "prose instead of code",
+    "no `export default function`", "JSX in a .ts", "forbidden package", "'use client'",
+)
+# Files every kit app has besides the plan (so imports of them are not flagged).
+_TEMPLATE_FILES = {"src/App.tsx", "src/main.tsx", "src/index.css", "src/design.css", "src/lib/utils.ts", "design.json"}
 
 _runs: dict[str, "GenerationRun"] = {}
 
@@ -84,10 +100,22 @@ class GenerationRun:
     final_event: dict | None = None
     subscribers: list[asyncio.Queue] = field(default_factory=list)
     task: asyncio.Task | None = None
+    run_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    usage: dict[str, int] = field(default_factory=lambda: {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0})
+    warnings: list[dict] = field(default_factory=list)
 
     @property
     def finished(self) -> bool:
         return self.final_event is not None
+
+    def add_usage(self, prompt_tokens: int, completion_tokens: int) -> None:
+        self.usage["calls"] += 1
+        self.usage["prompt_tokens"] += int(prompt_tokens or 0)
+        self.usage["completion_tokens"] += int(completion_tokens or 0)
+
+    @property
+    def log_extra(self) -> dict:
+        return {"workspace_id": self.workspace_id, "run_id": self.run_id}
 
     # ── Events ────────────────────────────────────────────────────────────
     def emit(self, event: dict) -> None:
@@ -222,13 +250,49 @@ async def _execute(run: GenerationRun) -> None:
         await _note(run.workspace_id, status="done" if ok else "error")
 
 
+def _is_hard(problem: str) -> bool:
+    return any(marker in problem for marker in _HARD_PROBLEMS)
+
+
+def _personalize(workspace_id: str, app_name: str) -> list[tuple[str, str]]:
+    """Name the package and the document after the app; returns the (path, content) written."""
+    written: list[tuple[str, str]] = []
+    slug = re.sub(r"[^a-z0-9]+", "-", app_name.lower()).strip("-")[:60]
+    if not slug:
+        return written
+    try:
+        package = json.loads(ai_ide_service.read_file(workspace_id, "package.json"))
+        if isinstance(package, dict) and package.get("name") != slug:
+            package["name"] = slug
+            text = json.dumps(package, indent=2) + "\n"
+            ai_ide_service.save_file(workspace_id, "package.json", text)
+            written.append(("package.json", text))
+    except Exception:  # noqa: BLE001 - naming is cosmetic; the build goes on
+        logger.debug("[AI IDE] could not rename package.json for %s", workspace_id, exc_info=True)
+    try:
+        html = ai_ide_service.read_file(workspace_id, "index.html")
+        updated = re.sub(r"<title>.*?</title>", f"<title>{_escape_html(app_name)}</title>", html, count=1, flags=re.DOTALL)
+        if updated != html:
+            ai_ide_service.save_file(workspace_id, "index.html", updated)
+            written.append(("index.html", updated))
+    except Exception:  # noqa: BLE001
+        logger.debug("[AI IDE] could not retitle index.html for %s", workspace_id, exc_info=True)
+    return written
+
+
+def _escape_html(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 async def _generate(run: GenerationRun) -> None:
     workspace_id = run.workspace_id
     emit = run.emit
 
     emit({"type": "STATUS", "message": "Planning your app…"})
     try:
-        plan = await asyncio.wait_for(plan_files(run.idea), timeout=PLANNER_TIMEOUT)
+        raw_plan = await asyncio.wait_for(
+            plan_files(run.idea, log_extra=run.log_extra, usage_sink=run.add_usage), timeout=PLANNER_TIMEOUT
+        )
     except asyncio.TimeoutError:
         emit({"type": "ERROR", "message": f"Planner timed out after {int(PLANNER_TIMEOUT)}s. Try a shorter idea."})
         return
@@ -236,46 +300,49 @@ async def _generate(run: GenerationRun) -> None:
         emit({"type": "ERROR", "message": f"Planner error: {exc}"})
         return
 
-    files_list = [
-        f for f in plan.get("files", [])
-        if isinstance(f, dict) and isinstance(f.get("path"), str) and f["path"].strip()
-    ]
-    routes_list = [
-        r for r in plan.get("routes", [])
-        if isinstance(r, dict) and all(isinstance(r.get(k), str) for k in ("path", "component", "importPath"))
-    ]
-    if not files_list:
-        emit({"type": "ERROR", "message": "Planner returned no files"})
+    # The planner already validated its own reply; a plan from anywhere else
+    # (an older planner, a test) goes through the same normalisation here.
+    try:
+        plan = normalize_plan(raw_plan)
+    except PlanError as exc:
+        emit({"type": "ERROR", "message": f"Planner returned an unusable plan: {exc}"})
         return
 
+    files_list: list[dict] = [f.model_dump() for f in plan.files]
+    routes_list: list[dict] = [r.model_dump() for r in plan.routes]
+
     # Every file knows the app it belongs to, so each prompt carries the same name and look.
-    app_name = str(plan.get("app_name") or "").strip()
-    color_theme = str(plan.get("color_theme") or "").strip()
+    app_name = plan.app_name
+    color_theme = plan.color_theme
     component_names = [
-        str(f.get("component_name") or "")
-        for f in files_list
-        if normalize_plan_path(f["path"]).startswith("src/components/") and f.get("component_name")
+        f["component_name"] for f in files_list
+        if f["path"].startswith("src/components/") and f.get("component_name")
     ]
     for file_spec in files_list:
-        file_spec["path"] = normalize_plan_path(file_spec["path"])
         if app_name:
-            file_spec.setdefault("app_name", app_name)
+            file_spec["app_name"] = app_name
         if color_theme:
-            file_spec.setdefault("color_theme", color_theme)
+            file_spec["color_theme"] = color_theme
         # So the Navbar links to real routes and pages import components that exist.
         file_spec["routes"] = routes_list
         file_spec["components"] = component_names
+        file_spec["usage_sink"] = run.add_usage
+        file_spec["log_extra"] = run.log_extra
 
     if app_name:
         await _note(workspace_id, name=app_name)
     emit({
         "type": "PLAN",
         "app_name": app_name,
-        "description": str(plan.get("description") or ""),
+        "description": plan.description,
         "files": [f["path"] for f in files_list],
         "routes": routes_list,
     })
     emit({"type": "STATUS", "message": f"Plan ready: generating {len(files_list)} file(s)…"})
+
+    if app_name:
+        for path, content in _personalize(workspace_id, app_name):
+            emit({"type": "FILE_UPDATE", "path": path, "content": content})
 
     def _wire_routes(done_modules: set[str], final: bool = False) -> None:
         """Point App.tsx at the pages generated so far; a failure here is reported, not fatal.
@@ -298,6 +365,9 @@ async def _generate(run: GenerationRun) -> None:
     failed_files: list[dict] = []
     generated_modules: set[str] = set()
     routed_modules = {route_module(r["importPath"]) for r in routes_list}
+    planned_paths = {f["path"] for f in files_list}
+    known_files: set[str] = set(kit.kit_files()) | set(_TEMPLATE_FILES)
+    kit_exports = set(kit.kit_exports()) if kit.has_kit() else None
 
     # The app's name and full navigation are known from the plan: show them right away.
     _wire_routes(generated_modules)
@@ -305,9 +375,8 @@ async def _generate(run: GenerationRun) -> None:
     # Shared code written so far, shown to later prompts so pages match it.
     written_context: dict[str, str] = {}
 
-    async def _generate_one(file_spec: dict) -> None:
-        path = file_spec["path"]
-        file_spec["context_files"] = dict(written_context)
+    async def _attempt(file_spec: dict, path: str) -> tuple[str, str, str | None]:
+        """One model call: (cleaned content, raw streamed text, error)."""
         emit({"type": "FILE_CREATE", "path": path})
 
         async def _collect_file() -> str:
@@ -317,22 +386,52 @@ async def _generate(run: GenerationRun) -> None:
                 emit({"type": "STREAM_TOKEN", "path": path, "token": token})
             return "".join(parts)
 
-        error: str | None = None
-        content = ""
         try:
             content = await asyncio.wait_for(_collect_file(), timeout=FILE_TIMEOUT)
         except asyncio.TimeoutError:
-            error = f"Generation timed out after {int(FILE_TIMEOUT)}s"
+            return "", "", f"Generation timed out after {int(FILE_TIMEOUT)}s"
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            error = f"Generation failed: {exc}"
-
+            return "", "", f"Generation failed: {exc}"
         # Models sometimes wrap the file in a markdown fence despite the prompt;
         # the file on disk is the code, so the client gets the cleaned text.
-        cleaned = strip_code_fences(content) if error is None else ""
-        if error is None and not cleaned.strip():
-            error = "The model returned no code"
+        cleaned = strip_code_fences(content)
+        if not cleaned.strip():
+            return "", content, "The model returned no code"
+        return cleaned, content, None
+
+    async def _generate_one(file_spec: dict) -> None:
+        path = file_spec["path"]
+        file_spec["context_files"] = dict(written_context)
+        error: str | None = None
+        cleaned = ""
+        streamed = ""
+        soft_problems: list[str] = []
+        for attempt in range(1, FILE_ATTEMPTS + 1):
+            cleaned, streamed, error = await _attempt(file_spec, path)
+            if error is not None:
+                break  # provider errors and timeouts used their budget; not retried here
+            result = verify_file(
+                path,
+                cleaned,
+                kit_exports=kit_exports,
+                workspace_files=known_files | set(written_context),
+                planned_files=planned_paths,
+                component_name=file_spec.get("component_name") or None,
+            )
+            if result.ok:
+                soft_problems = []
+                break
+            hard = [p for p in result.problems if _is_hard(p)]
+            soft_problems = [p for p in result.problems if not _is_hard(p)]
+            if attempt < FILE_ATTEMPTS:
+                file_spec["previous_problems"] = result.problems
+                emit({"type": "STATUS", "message": f"Rewriting {path}: {result.message}"})
+                continue
+            if hard:
+                error = f"The generated file is not valid: {'; '.join(hard)}"
+        file_spec.pop("previous_problems", None)
 
         if error is not None:
             # Nothing is written for a failed file: no placeholder is saved as generated code.
@@ -340,6 +439,9 @@ async def _generate(run: GenerationRun) -> None:
             emit({"type": "FILE_ERROR", "path": path, "message": error})
             emit({"type": "STATUS", "message": f"Failed to generate {path}: {error}"})
             return
+        if soft_problems:
+            run.warnings.append({"path": path, "problems": soft_problems})
+            emit({"type": "STATUS", "message": f"Warning for {path}: {'; '.join(soft_problems)}"})
 
         if path.endswith(".ts") and has_jsx(cleaned):
             # The model put JSX in a .ts file. As .tsx it compiles, and imports written
@@ -350,9 +452,10 @@ async def _generate(run: GenerationRun) -> None:
             path = new_path
         else:
             ai_ide_service.save_file(workspace_id, path, cleaned)
-            if cleaned != content:
+            if cleaned != streamed:
                 emit({"type": "FILE_UPDATE", "path": path, "content": cleaned})
         emit({"type": "FILE_DONE", "path": path})
+        known_files.add(path)
         if not path.startswith("src/pages/"):
             written_context[path] = cleaned
 
@@ -386,6 +489,9 @@ async def _generate(run: GenerationRun) -> None:
         "files_generated": len(files_list) - len(failed_files),
         "files_failed": len(failed_files),
         "failed_files": failed_files,
+        "warnings": list(run.warnings),
+        "usage": dict(run.usage),
+        "run_id": run.run_id,
     })
 
 

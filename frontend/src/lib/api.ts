@@ -1274,9 +1274,14 @@ export const api = {
   getRepoTests: (analysisId: string) =>
     apiClient.get<PlaywrightTestCase[]>(`/repo/analyses/${analysisId}/tests`).then((r) => r.data),
 
-  executeRepoTests: (analysisId: string) =>
+  // The test account fills the {{TEST_EMAIL}} / {{TEST_PASSWORD}} placeholders in the
+  // stored steps on the server at run time; it is sent in the body and never stored.
+  executeRepoTests: (analysisId: string, test_email?: string, test_password?: string) =>
     apiClient
-      .post<{ run_id: string; total: number; status: string }>(`/repo/analyses/${analysisId}/execute`)
+      .post<{ run_id: string; total: number; status: string }>(`/repo/analyses/${analysisId}/execute`, {
+        ...(test_email && { test_email }),
+        ...(test_password && { test_password }),
+      })
       .then((r) => r.data),
 
   getLiveRunStatus: (runId: string) =>
@@ -1292,11 +1297,13 @@ export const api = {
     apiClient.put<PlaywrightTestCase>(`/repo/tests/${test_id}`, data).then((r) => r.data),
 
   // Run tests directly without going through the analysis pipeline
-  executeTestsDirect: (tests: PlaywrightTestCase[], targetUrl: string) =>
+  executeTestsDirect: (tests: PlaywrightTestCase[], targetUrl: string, test_email?: string, test_password?: string) =>
     apiClient
       .post<{ run_id: string; total: number; status: string }>("/repo/execute-direct", {
         tests,
         target_url: targetUrl,
+        ...(test_email && { test_email }),
+        ...(test_password && { test_password }),
       })
       .then((r) => r.data),
 
@@ -1572,9 +1579,10 @@ export const api = {
     apiClient.delete(`/tests/workspace-suites/${suite_id}`).then((r) => r.data),
 
   // ── Pipeline ──────────────────────────────────────────────────────────────
+  // The PAT travels in the body, never as a query parameter (access logs, browser history).
   reviewCommit: (owner: string, repo: string, sha: string, pat?: string, customRules?: string) =>
     apiClient
-      .post(`/github/commits/${sha}/review`, { custom_rules: customRules || undefined }, { params: { owner, repo, ...(pat ? { pat } : {}) } })
+      .post(`/github/commits/${sha}/review`, { custom_rules: customRules || undefined, pat: pat || undefined }, { params: { owner, repo } })
       .then((r) => r.data as {
         sha: string;
         review: PipelineReview;

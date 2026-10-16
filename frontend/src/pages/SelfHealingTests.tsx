@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { PageShell } from "@/components/PageShell";
 import { PageHeader } from "@/components/PageHeader";
+import { TestSuiteTabs } from "@/components/TestSuiteTabs";
 import { PageCard } from "@/components/PageCard";
 import { DataTable } from "@/components/imcc/DataTable";
 import { KpiStat, Panel } from "@/components/imcc/Panel";
@@ -73,6 +74,7 @@ export default function SelfHealingTests() {
         title="Test Repair"
         description="When a selector breaks, Chakram scans the live page, proposes a replacement, and waits for your approval before writing anything back to the stored test."
       />
+      <TestSuiteTabs />
 
       {isLoading && (
         <Panel>

@@ -70,6 +70,15 @@ AIDLC-main/
 (App Studio), `/repo-baseline`, `/root-cause`, `/test-selection`, `/self-healing`,
 `/settings/connectors`, `/login`.
 
+All of these routes stay reachable, but the sidebar (`frontend/src/lib/nav-config.ts`)
+shows only the streamlined set: Build & Code, Requirements & Planning, Testing &
+Quality, Release & Ops, plus Connectors and Usage & Cost in the footer. Test
+Baseline, Test Selection, Root Cause, Test Repair and Tests from Docs are tabs of
+Test Suite (`components/TestSuiteTabs.tsx`); CI Health, Sprint Health, Release Gate
+and Incidents are parked and appear only when the connector that feeds them
+(GitHub, Jira, Slack/Datadog) is configured; Code Impact, Requirement Insights and
+Metric Anomalies are reachable by URL and global search only.
+
 Guided 4-step core workflow (sidebar "Beta / In Progress" group):
 Requirements → Test Suite → Test Execution → Risk Ranking, with Synthetic
 Data as a supporting step.
@@ -143,6 +152,17 @@ PID only. Do not touch Docker containers other than `aidlc-mongo`.
 - The run announces a `PLAN` first, strips stray markdown fences before saving, and
   re-wires `src/App.tsx` routes each time a page finishes, so the preview shows pages
   as they land. Failed files get `FILE_ERROR` and nothing is written for them.
+- The planner's reply is normalised by `engines/plan_schema.normalize_plan` (paths,
+  routes, one `/` route, marks, icons, at most 8 pages) and the model gets one repair
+  turn on `PlanError`. Every generated file passes `engines/verify.verify_file` (a
+  structural check: truncation, fences, default export, kit exports, local imports) and
+  is regenerated once with the reasons; hard failures reject the file, soft ones warn.
+- Prompts are split: a per-role **system** message (role + a sheet from
+  `backend/app/templates/chronos_kit/sheets/` + rules, identical across the pages of a
+  build) and a per-file **user** message. `KIT_API.md` is the human reference;
+  `tests/test_kit_reference.py` fails when it, a sheet, or `preview-runtime.js` drifts
+  from the kit's exports or `TEMPLATE_DEPENDENCIES`. `GENERATION_DONE` reports
+  `usage`, `warnings` and `run_id`; `api_cost_logs` rows carry `workspace_id`/`run_id`/`path`.
 - The Live preview (`frontend/src/components/ai-ide/preview-runtime.js`, inlined by
   `AiIdePreview.tsx`) compiles the workspace in a sandboxed iframe (no
   `allow-same-origin`): Sucrase + es-module-lexer from esm.sh, packages pinned to the

@@ -12,6 +12,7 @@ import { useRequirements } from "@/hooks/use-requirements";
 import { apiErrorMessage } from "@/lib/api-error";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
+import { TestSuiteTabs } from "@/components/TestSuiteTabs";
 import { DataTable } from "@/components/imcc/DataTable";
 import { Panel } from "@/components/imcc/Panel";
 import { StatusBadge, type StatusTone } from "@/components/imcc/StatusBadge";
@@ -115,6 +116,7 @@ const GeneratedTests = () => {
           </Button>
         }
       />
+      <TestSuiteTabs />
 
       {requirements.length > 1 && (
         <Panel>

@@ -33,6 +33,7 @@ import type {
   ImpactPlaywrightStep,
 } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
+import { TestSuiteTabs } from "@/components/TestSuiteTabs";
 import { StatusBadge, type StatusTone } from "@/components/imcc/StatusBadge";
 
 const eyebrow = "font-sans text-[11px] font-medium uppercase tracking-[0.08em] text-ink-quaternary";
@@ -530,6 +531,7 @@ export default function DocTests() {
           description="Upload a spec or requirements document, review the test scenarios extracted from it, then generate Playwright test cases in the Live Test Run format."
           className="border-b-0 pb-3"
         />
+        <TestSuiteTabs className="pb-3" />
       </div>
 
       {/* ── Step toolbar ── */}

@@ -194,6 +194,20 @@ export function useAiGenerationWS(workspaceId: string | null) {
               dispatch({ type: "SET_STATUS", status: "done", message: "Generation complete" });
               dispatch({ type: "ADD_LOG", message: "✓ All files generated" });
             }
+            if (Array.isArray(data.warnings)) {
+              for (const warning of data.warnings) {
+                if (warning && typeof warning.path === "string" && Array.isArray(warning.problems)) {
+                  dispatch({ type: "ADD_LOG", message: `Check ${warning.path}: ${warning.problems.join("; ")}` });
+                }
+              }
+            }
+            if (data.usage && typeof data.usage.prompt_tokens === "number") {
+              const u = data.usage;
+              dispatch({
+                type: "ADD_LOG",
+                message: `Model usage: ${u.calls} call(s), ${u.prompt_tokens} prompt + ${u.completion_tokens} completion tokens`,
+              });
+            }
             ws.close();
             break;
 

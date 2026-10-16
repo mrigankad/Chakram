@@ -278,7 +278,8 @@ export function useAnalysisJob(jobId: string | null) {
 
 export function useExecuteRepoTests() {
   return useMutation({
-    mutationFn: (analysisId: string) => api.executeRepoTests(analysisId),
+    mutationFn: ({ analysisId, email, password }: { analysisId: string; email?: string; password?: string }) =>
+      api.executeRepoTests(analysisId, email, password),
   });
 }
 
@@ -308,8 +309,12 @@ export type LiveTestingPhase = "idle" | "analyzing" | "ready" | "executing" | "d
 
 export function useExecuteTestsDirect() {
   return useMutation({
-    mutationFn: ({ tests, targetUrl }: { tests: PlaywrightTestCase[]; targetUrl: string }) =>
-      api.executeTestsDirect(tests, targetUrl),
+    mutationFn: ({ tests, targetUrl, email, password }: {
+      tests: PlaywrightTestCase[];
+      targetUrl: string;
+      email?: string;
+      password?: string;
+    }) => api.executeTestsDirect(tests, targetUrl, email, password),
   });
 }
 
@@ -432,10 +437,16 @@ export function useLiveTesting() {
       if (isLocalAnalysis(analysis.analysis_id)) {
         const tests = injectCredentialsIntoTests(editedTests ?? analysis.tests, specAuth?.email, specAuth?.password);
         const targetUrl = specTargetUrl ?? "";
-        const res = await executeDirect.mutateAsync({ tests, targetUrl });
+        const res = await executeDirect.mutateAsync({
+          tests, targetUrl, email: specAuth?.email, password: specAuth?.password,
+        });
         setRunId(res.run_id);
       } else {
-        const res = await executeTests.mutateAsync(analysis.analysis_id);
+        // Generated steps hold {{TEST_EMAIL}} / {{TEST_PASSWORD}} placeholders; the
+        // server fills them in the browser at run time.
+        const res = await executeTests.mutateAsync({
+          analysisId: analysis.analysis_id, email: specAuth?.email, password: specAuth?.password,
+        });
         setRunId(res.run_id);
       }
     } catch (err: unknown) {
@@ -476,14 +487,14 @@ export function useLiveTesting() {
       setErrorMsg(null);
       prevRunStatus.current = null;
       try {
-        const normalized = injectCredentialsForRun(
-          tests as PlaywrightTestCase[],
-          email ?? specAuth?.email,
-          password ?? specAuth?.password,
-        );
+        const runEmail = email ?? specAuth?.email;
+        const runPassword = password ?? specAuth?.password;
+        const normalized = injectCredentialsForRun(tests as PlaywrightTestCase[], runEmail, runPassword);
         const res = await executeDirect.mutateAsync({
           tests: normalized,
           targetUrl,
+          email: runEmail,
+          password: runPassword,
         });
         setRunId(res.run_id);
       } catch (err: unknown) {

@@ -1,9 +1,9 @@
 # Chronos kit: API for page authors
 
 Target: Vite + React 18 + TypeScript + Tailwind 3.4 + react-router-dom 6 + recharts 2.15 + lucide-react.
-Kit version: `src/chronos/VERSION` (6).
+Kit version: `src/chronos/VERSION` (8).
 
-Setup the host app must do once: `src/main.tsx` imports `./chronos/tokens.css` and wraps the app in `BrowserRouter`. `tailwind.config.js` needs `content: ["./src/**/*.{ts,tsx}"]` and `theme: { extend: <contents of src/chronos/theme.json> }`.
+Setup the host app must do once: `src/index.css` imports `./chronos/tokens.css` (then `./design.css`) and `src/main.tsx` wraps the app in `BrowserRouter`. `tailwind.config.js` needs `content: ["./src/**/*.{ts,tsx}"]` and `theme: { extend: <contents of src/chronos/theme.json> }`.
 
 ## Import
 
@@ -99,8 +99,8 @@ Type: `font-display` (Michroma: page titles and metric figures only), `font-sans
 
 ## Charts (import from the same '../chronos')
 
-Import from `'../chronos/charts'`. Not yet re-exported from `chronos/index.ts`.
-Shared: `tone` is `series-1`..`series-10`, `positive`, `negative`, `warning`, `error`, `neutral`; unknown tones fall back to a series colour by position. `format` is `"number" | "currency" | "percent"` (percent takes fractions: 0.42 = 42%). Helpers: `toneColor`, `formatChartValue(value, format?, mode?)`; types `ChartTone`, `ChartValueFormat`. Every component accepts `className`, never throws on bad input (non-array data is empty, NaN is a gap or 0), and renders loading, error (with Retry) and empty states.
+Charts are re-exported from `'../chronos'`; `'../chronos/charts'` also works.
+Shared: `tone` is `series-1`..`series-6`, `positive`, `negative`, `warning`, `error`, `neutral`; unknown tones fall back to a series colour by position. `format` is `"number" | "currency" | "percent"` (percent takes fractions: 0.42 = 42%). Helpers: `toneColor`, `formatChartValue(value, format?, mode?)`; types `ChartTone`, `ChartValueFormat`. Every component accepts `className`, never throws on bad input (non-array data is empty, NaN is a gap or 0), and renders loading, error (with Retry) and empty states.
 
 ## Signatures
 

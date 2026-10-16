@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageShell } from "@/components/PageShell";
 import { PageHeader } from "@/components/PageHeader";
+import { TestSuiteTabs } from "@/components/TestSuiteTabs";
 import { PageCard } from "@/components/PageCard";
 import { DataTable } from "@/components/imcc/DataTable";
 import { KpiStat, Panel } from "@/components/imcc/Panel";
@@ -96,6 +97,7 @@ export default function TestSelection() {
         title="Test Selection"
         description="Changed files are matched to baseline tests that reference the same file or the same directory. Each match is explained, and only the selected tests run."
       />
+      <TestSuiteTabs />
 
       <Panel>
         <div className="grid gap-4 md:grid-cols-4">

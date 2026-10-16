@@ -21,7 +21,7 @@ def _llm(monkeypatch, outcomes: dict):
     """Fake the single LLM entry point. `outcomes` maps a marker in the prompt to an answer or exception."""
     calls: list[str] = []
 
-    async def run_llm(prompt, json_mode=True, timeout=None):
+    async def run_llm(prompt, json_mode=True, timeout=None, system=None):
         for marker, outcome in outcomes.items():
             if marker in prompt:
                 calls.append(marker)

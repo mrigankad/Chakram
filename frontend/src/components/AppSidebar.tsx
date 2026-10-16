@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Mark } from "@/components/Mark";
 import { SECTION_MARKS, type NavSectionId } from "@/lib/marks";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -7,13 +7,17 @@ import { ChevronRight, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Settings, Su
 import { AppIcon } from "@/components/AppIcon";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useAuth } from "@/context/AuthContext";
+import { useOrgConnectors } from "@/hooks/use-org-connectors";
 import { BRAND_NAME, LOGO_ICON_SRC } from "@/lib/brand";
 import {
+  configuredConnectors,
+  costTrackerItem,
   dashboardItem,
   findNavItemForPath,
   findSectionForPath,
   pipelineItem,
   platformSections,
+  visibleSections,
   type NavIcon,
   type NavItem,
   type NavSection,
@@ -291,6 +295,15 @@ export function AppSidebar({
   const activeSectionId = findSectionForPath(location.pathname);
   const isDark = resolvedTheme === "dark";
 
+  // Parked pages (CI Health, Sprint Health, Release Gate, Incidents) are listed
+  // only when the connector that feeds them is configured; if the lookup fails,
+  // none of them show.
+  const { data: connectors } = useOrgConnectors();
+  const sections = useMemo(
+    () => visibleSections(platformSections, configuredConnectors(connectors)),
+    [connectors],
+  );
+
   // Accordion: only one section is open. Until the user picks one, it is the
   // section holding the current page; navigating to another section opens that one.
   const isOpen = (id: string) => (openId === undefined ? id === activeSectionId : id === openId);
@@ -347,7 +360,7 @@ export function AppSidebar({
               />
             </li>
           ))}
-          {platformSections.map((section) => (
+          {sections.map((section) => (
             <SectionGroup
               key={section.id}
               section={section}
@@ -382,6 +395,14 @@ export function AppSidebar({
           to="/settings/connectors"
           expanded={expanded}
           active={location.pathname === "/settings/connectors"}
+          onClick={onCloseMobile}
+        />
+        <RailItem
+          icon={costTrackerItem.icon}
+          label={costTrackerItem.title}
+          to={costTrackerItem.url}
+          expanded={expanded}
+          active={location.pathname === costTrackerItem.url}
           onClick={onCloseMobile}
         />
         <AccountRow

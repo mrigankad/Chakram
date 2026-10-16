@@ -11,7 +11,7 @@ import uuid
 import weakref
 from contextvars import ContextVar, Token
 from datetime import datetime, timezone
-from typing import Any
+from typing import Callable, Any
 
 from openai import APIConnectionError, APIError, APITimeoutError, OpenAI, RateLimitError
 
@@ -132,13 +132,23 @@ def _call_openai_sync(
     prompt: str,
     json_mode: bool = True,
     timeout: float | None = None,
+    system: str | None = None,
 ) -> tuple[str, int, int]:
-    """Synchronous Ollama chat completion. Returns (content, prompt_tokens, completion_tokens)."""
+    """Synchronous Ollama chat completion. Returns (content, prompt_tokens, completion_tokens).
+
+    `system`, when given, is sent as the system message. Callers put the static
+    part of a prompt there (role, reference material, rules) and the varying
+    part in `prompt`, so a provider that caches prompt prefixes can reuse it.
+    """
     _, _, model = _ollama_cfg()
     client = _get_client()
+    messages: list[dict] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
     kwargs: dict = {
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages,
         "timeout": timeout or settings.LLM_TIMEOUT_SECONDS,
     }
     if json_mode:
@@ -189,14 +199,22 @@ async def _run_llm(
     prompt: str,
     json_mode: bool = True,
     timeout: float | None = None,
+    system: str | None = None,
 ) -> tuple[str, int, int]:
     """Run one LLM call in a worker thread, at most LLM_MAX_CONCURRENCY at a time."""
     async with _llm_semaphore():
-        return await asyncio.to_thread(_call_openai_sync, prompt, json_mode, timeout)
+        return await asyncio.to_thread(_call_openai_sync, prompt, json_mode, timeout, system)
 
 
-async def _log_cost(task_name: str, prompt_tokens: int, completion_tokens: int) -> None:
-    """Persist a cost record to MongoDB. Never raises cost logging must not break AI calls."""
+async def _log_cost(
+    task_name: str, prompt_tokens: int, completion_tokens: int, extra: dict | None = None
+) -> None:
+    """Persist a cost record to MongoDB. Never raises cost logging must not break AI calls.
+
+    `extra` holds attribution the caller knows and this module does not
+    (workspace_id, run_id, path for App Studio builds); only plain string/number
+    values are stored.
+    """
     try:
         input_cost = round(prompt_tokens * _COST_INPUT_PER_TOKEN, 6)
         output_cost = round(completion_tokens * _COST_OUTPUT_PER_TOKEN, 6)
@@ -204,7 +222,7 @@ async def _log_cost(task_name: str, prompt_tokens: int, completion_tokens: int) 
         from app.database import get_db
         _, _, model = _ollama_cfg()
         db = get_db()
-        await db["api_cost_logs"].insert_one({
+        doc = {
             "org_id": _current_org_id.get(),
             "task_name": task_name,
             "model": model,
@@ -215,7 +233,11 @@ async def _log_cost(task_name: str, prompt_tokens: int, completion_tokens: int) 
             "output_cost_usd": output_cost,
             "total_cost_usd": total_cost,
             "created_at": datetime.now(timezone.utc),
-        })
+        }
+        for key, value in (extra or {}).items():
+            if isinstance(key, str) and key not in doc and isinstance(value, (str, int, float, bool)):
+                doc[key] = value
+        await db["api_cost_logs"].insert_one(doc)
     except Exception:
         pass  # Never break the main AI call due to cost logging failure
 
@@ -225,15 +247,27 @@ async def _call_openai(
     json_mode: bool = True,
     task_name: str | None = None,
     timeout: float | None = None,
+    system: str | None = None,
+    log_extra: dict | None = None,
+    usage_sink: Callable[[int, int], None] | None = None,
 ) -> str:
-    """Async wrapper runs the sync call in a thread so the event loop isn't blocked."""
+    """Async wrapper runs the sync call in a thread so the event loop isn't blocked.
+
+    `usage_sink(prompt_tokens, completion_tokens)` lets a caller total a
+    multi-call job; `log_extra` is stored on the usage log row.
+    """
     if task_name is None:
         frame = inspect.currentframe()
         caller = frame.f_back.f_code.co_name if (frame and frame.f_back) else "unknown"
         task_name = _TASK_LABELS.get(caller, caller.replace("_", " ").title())
 
-    content, prompt_tokens, completion_tokens = await _run_llm(prompt, json_mode, timeout)
-    asyncio.create_task(_log_cost(task_name, prompt_tokens, completion_tokens))
+    content, prompt_tokens, completion_tokens = await _run_llm(prompt, json_mode, timeout, system)
+    if usage_sink is not None:
+        try:
+            usage_sink(prompt_tokens, completion_tokens)
+        except Exception:  # noqa: BLE001 - totals never break the call
+            logger.exception("usage sink failed for %s", task_name)
+    asyncio.create_task(_log_cost(task_name, prompt_tokens, completion_tokens, extra=log_extra))
     return content
 
 
@@ -567,24 +601,28 @@ async def generate_playwright_tests(
     """
     Given a structured codebase analysis, generate Playwright test cases with
     specific, executable steps (navigate, click, fill, assert_text, screenshot).
-    Real credentials (test_email / test_password) are injected so that login tests
-    use actual values instead of placeholders.
+    The real test_email / test_password never enter the prompt: when they are
+    available the model is told to write the {{TEST_EMAIL}} / {{TEST_PASSWORD}}
+    placeholders, which playwright_service substitutes in the browser at run time.
     """
+    from app.services.playwright_service import TEST_EMAIL_TOKEN, TEST_PASSWORD_TOKEN
+
     # Build credentials hint for the prompt
     cred_section = ""
     if test_email and test_password:
         cred_section = f"""
-REAL TEST CREDENTIALS (use these exact values in fill steps for login forms):
-  Email:    {test_email}
-  Password: {test_password}
+TEST CREDENTIALS: A real test account is available. Its values are substituted at run time, so in fill
+steps for login forms use EXACTLY these placeholder strings as the value:
+  Email/username field: {TEST_EMAIL_TOKEN}
+  Password field:       {TEST_PASSWORD_TOKEN}
 
-IMPORTANT: Replace any placeholder email/password values with the credentials above.
-Do NOT use "testuser@example.com" or "Password123!" use the real credentials provided.
+IMPORTANT: Do NOT invent email or password values such as "testuser@example.com" or "Password123!"
+for login use the placeholders above, written literally.
 """
     elif test_email:
         cred_section = f"""
-REAL TEST CREDENTIALS:
-  Email:    {test_email}
+TEST CREDENTIALS: A test email is available and is substituted at run time: write EXACTLY the placeholder
+string {TEST_EMAIL_TOKEN} as the value of email/username fill steps.
   Password: (not provided skip tests that require a password)
 """
     else:
@@ -637,18 +675,27 @@ async def analyze_commit_and_generate_tests(
     Given the diff of a specific commit, first understand what user-facing
     functionality changed, then generate targeted Playwright tests for those changes.
     Returns (analysis_data, tests_list).
+
+    The real test_email / test_password never enter the prompt: the model writes the
+    {{TEST_EMAIL}} / {{TEST_PASSWORD}} placeholders, substituted at run time.
     """
+    from app.services.playwright_service import TEST_EMAIL_TOKEN, TEST_PASSWORD_TOKEN
+
     cred_section = ""
+    example_email, example_password = "user@example.com", "password"
     if test_email and test_password:
+        example_email, example_password = TEST_EMAIL_TOKEN, TEST_PASSWORD_TOKEN
         cred_section = f"""
-REAL TEST CREDENTIALS (use these EXACT values in login fill steps):
-  Email:    {test_email}
-  Password: {test_password}
+TEST CREDENTIALS: A real test account is available and is substituted at run time. In login fill steps
+use EXACTLY these placeholder strings as the value, written literally:
+  Email/username field: {TEST_EMAIL_TOKEN}
+  Password field:       {TEST_PASSWORD_TOKEN}
 """
     elif test_email:
+        example_email = TEST_EMAIL_TOKEN
         cred_section = f"""
-REAL TEST CREDENTIALS:
-  Email:    {test_email}
+TEST CREDENTIALS: A test email is available and is substituted at run time: write EXACTLY the placeholder
+string {TEST_EMAIL_TOKEN} as the value of email/username fill steps.
   Password: (not provided skip tests that require a password)
 """
     else:
@@ -709,8 +756,8 @@ Return ONLY valid JSON (no markdown, no explanation):
       "steps": [
         {{"action": "navigate", "selector": null, "value": "/", "description": "Open the app"}},
         {{"action": "screenshot", "selector": null, "value": null, "description": "Capture initial state"}},
-        {{"action": "fill", "selector": "input[type=\\"email\\"]", "value": "{test_email or 'user@example.com'}", "description": "Enter email"}},
-        {{"action": "fill", "selector": "input[type=\\"password\\"]", "value": "{test_password or 'password'}", "description": "Enter password"}},
+        {{"action": "fill", "selector": "input[type=\\"email\\"]", "value": "{example_email}", "description": "Enter email"}},
+        {{"action": "fill", "selector": "input[type=\\"password\\"]", "value": "{example_password}", "description": "Enter password"}},
         {{"action": "click", "selector": "button:has-text(\\"Sign In\\")", "value": null, "description": "Sign in"}},
         {{"action": "wait", "selector": null, "value": "4", "description": "Wait for redirect"}},
         {{"action": "assert_text", "selector": null, "value": "Expected text after action", "description": "Verify the change works"}},
@@ -723,7 +770,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 STRICT RULES for tests (all apply from the standard test generation):
 - ALWAYS start each test with "navigate".
 - Include at least 2 "screenshot" steps per test.
-- For login steps, use EXACT credentials provided.
+- For login steps, use EXACTLY the credential placeholders provided (never invented values).
 - After clicking login/submit, add "wait" step of "4" seconds.
 - For Radix UI Select triggers: use [role="combobox"], NOT button:has-text("...").
 - For Radix UI Checkboxes: use [role="checkbox"], NOT input[type="checkbox"].

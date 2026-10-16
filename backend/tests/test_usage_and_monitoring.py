@@ -115,14 +115,16 @@ async def test_generator_logs_reported_usage_and_uses_resolved_model():
     assert tokens == ["import ", "x"]
     assert client.calls[0]["model"] == "org-model"
     assert client.calls[0]["stream_options"] == {"include_usage": True}
-    logged.assert_awaited_once_with(generator._TASK_NAME, 120, 340)
+    logged.assert_awaited_once()
+    assert logged.await_args.args == (generator._TASK_NAME, 120, 340)
 
 
 async def test_generator_logs_zero_tokens_when_provider_reports_no_usage():
     client = _FakeClient([_chunk("a"), _chunk("b")])
     _tokens, logged = await _run_stream(client)
 
-    logged.assert_awaited_once_with(generator._TASK_NAME, 0, 0)
+    logged.assert_awaited_once()
+    assert logged.await_args.args == (generator._TASK_NAME, 0, 0)
 
 
 # ── monitoring: linear breach projection ──────────────────────────────────

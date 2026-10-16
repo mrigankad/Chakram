@@ -12,13 +12,7 @@ import {
 } from "@/components/ui/command";
 import { AppIcon } from "@/components/AppIcon";
 import { BRAND_NAME } from "@/lib/brand";
-import {
-  allNavItems,
-  dashboardItem,
-  pipelineItem,
-  platformSections,
-  type NavItem,
-} from "@/lib/nav-config";
+import { allSearchablePages, type NavItem } from "@/lib/nav-config";
 import {
   clearSearchHistory,
   getSearchHistory,
@@ -36,25 +30,14 @@ type Searchable = {
   icon: NavItem["icon"];
 };
 
-function buildIndex(): Searchable[] {
-  const rows: Searchable[] = [
-    { ...dashboardItem, section: "Overview", hint: "Platform overview" },
-    { ...pipelineItem, section: "Pipeline", hint: pipelineItem.hint },
-  ];
-  for (const section of platformSections) {
-    for (const item of section.items) {
-      rows.push({ ...item, section: section.label });
-    }
-  }
-  const seen = new Set<string>();
-  return rows.filter((r) => {
-    if (seen.has(r.url)) return false;
-    seen.add(r.url);
-    return true;
-  });
-}
-
-const INDEX = buildIndex();
+/** Every page, including those that left the sidebar, so search still reaches them. */
+const INDEX: Searchable[] = allSearchablePages().map(({ title, url, section, hint, icon }) => ({
+  title,
+  url,
+  section,
+  hint,
+  icon,
+}));
 
 type GlobalSearchProps = {
   open: boolean;
@@ -191,7 +174,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
         </span>
         <span className={cn("ml-auto inline-flex items-center gap-1")}>
           <Search className="h-3 w-3" />
-          {allNavItems.length} pages indexed
+          {INDEX.length} pages indexed
         </span>
       </div>
     </CommandDialog>

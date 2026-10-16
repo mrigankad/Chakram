@@ -3,6 +3,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/PageShell";
 import { PageHeader } from "@/components/PageHeader";
+import { TestSuiteTabs } from "@/components/TestSuiteTabs";
 import { PageCard } from "@/components/PageCard";
 import { DataTable } from "@/components/imcc/DataTable";
 import { KpiStat, Panel } from "@/components/imcc/Panel";
@@ -34,6 +35,7 @@ export default function RootCauseAnalysis() {
         title="Root Cause Analysis"
         description="For each failed test, the model reads the failure evidence and recent Git history and proposes what broke and which change likely caused it."
       />
+      <TestSuiteTabs />
 
       {isLoading && (
         <Panel>

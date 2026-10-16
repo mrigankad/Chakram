@@ -18,6 +18,9 @@ router = APIRouter(prefix="/github", tags=["GitHub"])
 
 class ReviewCommitRequest(BaseModel):
     custom_rules: Optional[str] = None
+    # Personal access token for private repos: in the body, never a query parameter
+    # (those land in access logs and browser history).
+    pat: Optional[str] = None
 
 
 class ReviewPRRequest(BaseModel):
@@ -120,11 +123,11 @@ async def review_commit(
     sha: str,
     owner: str,
     repo: str,
-    pat: Optional[str] = None,
     req: Optional[ReviewCommitRequest] = None,
     org: OrganizationOut = Depends(get_current_org),
 ):
     """Fetch a commit's diff and run AI code review (no PR required)."""
+    pat = (req.pat or None) if req else None
     files = await github_service.get_commit_diff(owner, repo, sha, pat)
     if not files:
         # Nothing was reviewed, so no recommendation or coverage figure is given.

@@ -14,6 +14,7 @@ from typing import Optional
 import git
 from git import Actor
 
+from app.config import settings
 from app.services import connector_settings_service as connectors
 from app.services.workspace_service import WORKSPACE_TEMP_DIR, _redact_credentials, get_workspace
 
@@ -333,13 +334,18 @@ async def commit_and_push(
     files: list[str],
     message: str,
     new_file_contents: dict[str, str],
-    author_name: str = "SDLC AI",
-    author_email: str = "ai@sdlc.dev",
+    author_name: str | None = None,
+    author_email: str | None = None,
 ) -> dict:
     """
     Write new file contents, stage given files, commit, and push.
     Returns commit SHA + GitHub URL.
+
+    The commit author defaults to settings.COMMIT_AUTHOR_NAME / COMMIT_AUTHOR_EMAIL;
+    a request may name another author.
     """
+    author_name = author_name or settings.COMMIT_AUTHOR_NAME
+    author_email = author_email or settings.COMMIT_AUTHOR_EMAIL
     pat = _resolve_push_token(_require_workspace(org_id, workspace_id))
 
     def _do():

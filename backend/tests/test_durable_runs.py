@@ -28,7 +28,7 @@ def _result(status, steps, test_id="t1"):
 async def test_run_is_persisted_while_running_and_readable_after_a_restart(db, monkeypatch):
     seen_mid_run: dict = {}
 
-    async def fake_execute(run, tests, target_url):
+    async def fake_execute(run, tests, target_url, credentials=None):
         run["results"].append(_result("running", [_step()]))
         # Give the write-through loop a tick, then look at what MongoDB holds mid-run.
         for _ in range(200):
@@ -94,7 +94,7 @@ async def test_running_run_with_a_live_owner_is_left_alone(db):
 
 
 async def test_run_stays_in_memory_when_mongo_rejects_the_final_write(db, monkeypatch):
-    async def fake_execute(run, tests, target_url):
+    async def fake_execute(run, tests, target_url, credentials=None):
         run["status"] = "completed"
 
     async def broken_persist(*_a, **_k):

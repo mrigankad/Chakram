@@ -46,6 +46,23 @@ _runs: dict[str, dict[str, Any]] = {}
 
 _STORED_ONLY = ("_id", "heartbeat_at")
 
+# Generated steps carry these literal placeholders instead of the test account's
+# real email and password. The values live only in the request that starts a run
+# and are written into the browser by `_run_step`; they never reach the LLM, the
+# stored tests, the run record or the log.
+TEST_EMAIL_TOKEN = "{{TEST_EMAIL}}"
+TEST_PASSWORD_TOKEN = "{{TEST_PASSWORD}}"
+
+
+def substitute_credentials(value: str, credentials: dict[str, str | None] | None) -> str:
+    """`value` with the credential placeholders replaced by the run's test account."""
+    if not credentials or not isinstance(value, str):
+        return value
+    return (
+        value.replace(TEST_EMAIL_TOKEN, credentials.get("email") or "")
+        .replace(TEST_PASSWORD_TOKEN, credentials.get("password") or "")
+    )
+
 
 def get_run(run_id: str, org_id: str) -> dict[str, Any] | None:
     """A run this process is executing (or has not yet handed to MongoDB)."""
@@ -336,6 +353,7 @@ async def _run_step(
     test_name: str,
     step_num: int,
     screenshot: str = "always",
+    credentials: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
     """Execute one step. Returns step_result dict. Never raises.
 
@@ -343,6 +361,10 @@ async def _run_step(
     Runner shows), "on_failure" (capture only if the step failed) or "never".
     Without a capture the result's "screenshot" is None, and the pauses that
     only let the page settle for the picture are skipped.
+
+    `credentials` ({"email", "password"}) replaces the TEST_EMAIL_TOKEN /
+    TEST_PASSWORD_TOKEN placeholders in the step's value just before it is typed
+    into the page; the substituted value is not logged.
     """
     capture_always = screenshot == "always"
 
@@ -357,6 +379,11 @@ async def _run_step(
 
     log.info("  ▶ Step %d [%s]: %s selector=%r value=%r",
              step_num, action.upper(), description, selector or None, value or None)
+    shown_value = value  # what the log may show: never a substituted credential
+    needs_account = TEST_EMAIL_TOKEN in value or TEST_PASSWORD_TOKEN in value
+    if credentials and needs_account:
+        value = substitute_credentials(value, credentials)
+        shown_value = "<credential>"
 
     step_result: dict[str, Any] = {
         "step_description": description,
@@ -366,6 +393,13 @@ async def _run_step(
     }
 
     try:
+        if TEST_EMAIL_TOKEN in value or TEST_PASSWORD_TOKEN in value:
+            # The literal placeholder must never be typed into a form: the run
+            # was started without the test account this step needs.
+            raise Exception(
+                "This step needs the test account (email/password), which was not provided for this run; "
+                "start the run with the account to fill it in"
+            )
         # A step that cannot act must fail, not pass having done nothing.
         given = {"selector": selector, "value": value}
         missing = [name for name in _REQUIRED_ARGS.get(action, ()) if not given[name]]
@@ -626,7 +660,7 @@ async def _run_step(
         elif action == "fill":
             if selector and value:
                 clean = _sanitize_selector(selector)
-                log.info("    → fill %r with %r", clean, value)
+                log.info("    → fill %r with %r", clean, shown_value)
 
                 is_dialog_fill = '[role="dialog"]' in selector or "dialog" in selector.lower()
 
@@ -1081,7 +1115,7 @@ async def _run_step(
         elif action == "type_into":
             if selector and value:
                 clean = _sanitize_selector(selector)
-                log.info("    → type_into %r with %r", clean, value)
+                log.info("    → type_into %r with %r", clean, shown_value)
                 await page.locator(clean).first.click(timeout=8_000)
                 await page.keyboard.type(value, delay=50)
                 await settle(0.3)
@@ -1131,11 +1165,16 @@ async def execute_playwright_tests(
     target_url: str,
     run_id: str,
     analysis_id: str,
+    test_email: str | None = None,
+    test_password: str | None = None,
 ) -> None:
     """
     Background task: run all tests sequentially with Playwright.
     The run's state is persisted for its whole lifetime; the frontend polls
     GET /repo/execution/{run_id}.
+
+    `test_email` / `test_password` fill the TEST_EMAIL_TOKEN / TEST_PASSWORD_TOKEN
+    placeholders in the tests' steps at run time; they are held in memory only.
     """
     log.info("=" * 60)
     log.info("🚀 Starting run %s | target=%s | tests=%d", run_id[:8], target_url, len(tests))
@@ -1169,8 +1208,9 @@ async def execute_playwright_tests(
     flusher = asyncio.create_task(
         durable_state.keep_flushed(lambda: _persist_run(db, run, saved_shots), _version, stop)
     )
+    credentials = {"email": test_email, "password": test_password} if (test_email or test_password) else None
     try:
-        await _execute(run, tests, target_url)
+        await _execute(run, tests, target_url, credentials)
     finally:
         stop.set()
         persisted = await asyncio.shield(flusher)
@@ -1179,7 +1219,12 @@ async def execute_playwright_tests(
             _runs.pop(run_id, None)
 
 
-async def _execute(run: dict[str, Any], tests: list[dict[str, Any]], target_url: str) -> None:
+async def _execute(
+    run: dict[str, Any],
+    tests: list[dict[str, Any]],
+    target_url: str,
+    credentials: dict[str, str | None] | None = None,
+) -> None:
     """Run the tests, updating `run` in place. Never raises except on cancellation."""
     run_id = run["run_id"]
 
@@ -1249,7 +1294,7 @@ async def _execute(run: dict[str, Any], tests: list[dict[str, Any]], target_url:
 
                     for s_idx, step in enumerate(steps, 1):
                         sr = await _run_step(
-                            page, step, target_url, run_id, test_name, s_idx
+                            page, step, target_url, run_id, test_name, s_idx, credentials=credentials
                         )
                         live_result["step_results"].append(sr)
                         live_result["steps_completed"] += 1

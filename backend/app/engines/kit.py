@@ -10,6 +10,7 @@ workspace); KIT_API.md is the compact reference given to the model.
 from __future__ import annotations
 
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -60,8 +61,102 @@ def outdated_kit_files(workspace_files: dict[str, str]) -> dict[str, str]:
 
 @lru_cache(maxsize=1)
 def kit_api() -> str:
+    """The full kit reference (for people and for the drift test); prompts use the sheets."""
     path = KIT_ROOT / "KIT_API.md"
     return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+
+
+SHEET_ROLES = ("page", "data", "component", "charts")
+
+
+@lru_cache(maxsize=8)
+def kit_sheet(role: str) -> str:
+    """The compact reference for one kind of file ("" when the kit or sheet is missing).
+
+    A page prompt gets `page` (+ `charts` when its blueprint names a chart), a
+    data module gets `data` and a shared component gets `component`. Sending the
+    full KIT_API.md to every file was ~60% of a build's prompt tokens.
+    """
+    if role not in SHEET_ROLES:
+        return ""
+    path = KIT_ROOT / "sheets" / f"{role}.md"
+    return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+
+
+def role_for(path: str) -> str:
+    if path.startswith("src/pages/"):
+        return "page"
+    if path.endswith(".ts"):
+        return "data"
+    return "component"
+
+
+_CHART_WORDS = re.compile(
+    r"(?:line|area|bar|combo|donut|pie|funnel|bullet) ?chart|sparkline|gauge|progress ?(?:ring|bars?)|\bcharts?\b|\btrend\b",
+    re.IGNORECASE,
+)
+
+
+def wants_charts(text: str) -> bool:
+    return bool(_CHART_WORDS.search(text or ""))
+
+
+_EXPORT_DECL = re.compile(
+    r"^export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|type|interface|enum)\s+([A-Za-z_$][\w$]*)",
+    re.MULTILINE,
+)
+_EXPORT_LIST = re.compile(r"^export\s*(?:type\s*)?\{([^}]*)\}\s*(?:from\s*['\"]([^'\"]+)['\"])?", re.MULTILINE | re.DOTALL)
+_EXPORT_STAR = re.compile(r"^export\s*\*\s*from\s*['\"]([^'\"]+)['\"]", re.MULTILINE)
+
+
+def _module_exports(files: dict[str, str], module: str, seen: set[str]) -> set[str]:
+    """Names exported by `module` ('src/chronos/index'), following re-exports."""
+    if module in seen:
+        return set()
+    seen.add(module)
+    text = None
+    for candidate in (module + ".ts", module + ".tsx", module + "/index.ts", module + "/index.tsx"):
+        if candidate in files:
+            text = files[candidate]
+            module_dir = candidate.rsplit("/", 1)[0]
+            break
+    if text is None:
+        return set()
+    names: set[str] = set(_EXPORT_DECL.findall(text))
+    for body, source in _EXPORT_LIST.findall(text):
+        for part in body.split(","):
+            part = re.sub(r"^\s*type\s+", "", part.strip())
+            if not part:
+                continue
+            exported = part.split(" as ")[-1].strip()
+            if exported:
+                names.add(exported)
+    for source in _EXPORT_STAR.findall(text):
+        target = _resolve(module_dir, source)
+        names |= _module_exports(files, target, seen)
+    return names
+
+
+def _resolve(base_dir: str, spec: str) -> str:
+    parts = base_dir.split("/") if base_dir else []
+    for part in spec.split("/"):
+        if part == ".":
+            continue
+        if part == "..":
+            if parts:
+                parts.pop()
+        else:
+            parts.append(part)
+    return "/".join(parts)
+
+
+@lru_cache(maxsize=1)
+def kit_exports() -> frozenset[str]:
+    """Every name `import { … } from '../chronos'` can resolve (empty when the kit is missing)."""
+    files = kit_files()
+    if not files:
+        return frozenset()
+    return frozenset(_module_exports(files, "src/chronos/index", set()))
 
 
 def marks_catalog(context: str | None = None, limit: int = 40) -> str:

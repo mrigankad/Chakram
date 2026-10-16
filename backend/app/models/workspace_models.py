@@ -120,8 +120,8 @@ class CommitRequest(BaseModel):
     branch: str
     files: list[str]          # relative paths to stage
     message: str
-    author_name: str = "SDLC AI"
-    author_email: str = "ai@sdlc.dev"
+    author_name: Optional[str] = None   # defaults to settings.COMMIT_AUTHOR_NAME
+    author_email: Optional[str] = None  # defaults to settings.COMMIT_AUTHOR_EMAIL
     new_file_contents: dict[str, str] = {}  # path -> new content to write before commit
 
 

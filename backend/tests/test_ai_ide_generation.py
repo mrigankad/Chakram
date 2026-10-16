@@ -8,6 +8,7 @@ from bson import ObjectId
 
 from app.auth.session import COOKIE_NAME, create_session_cookie
 from app.engines import generator
+from app.engines.verify import VerifyResult
 from app.routes import ai_ide
 from app.services import ai_ide_generation
 from app.services import ai_service, organization_service
@@ -82,9 +83,15 @@ async def _run(db, stream, plan=PLAN):
     with patch.object(ai_ide_generation, "ai_ide_service", new=workspace), \
          patch.object(ai_ide, "ai_ide_service", new=workspace), \
          patch.object(ai_ide_generation, "plan_files", new=AsyncMock(return_value=plan)), \
-         patch.object(ai_ide_generation, "stream_file", new=stream):
+         patch.object(ai_ide_generation, "verify_file", new=_accept_all), patch.object(ai_ide_generation, "stream_file", new=stream), \
+         patch.object(ai_ide_generation, "verify_file", new=_accept_all):
         await ai_ide.generate(ws, "ws-1")
     return ws, workspace, org
+
+
+def _accept_all(path, content, **kwargs):
+    """The orchestration tests stream stand-in text; the structural check has its own tests."""
+    return VerifyResult(True)
 
 
 def _stream(outcomes: dict):
@@ -110,10 +117,13 @@ async def test_all_files_generated_reports_zero_failures(db):
 
     assert ws.of_type("FILE_ERROR") == []
     assert [m["path"] for m in ws.of_type("FILE_DONE")] == [f["path"] for f in PLAN["files"]]
-    assert ws.sent[-1] == {
+    done = ws.sent[-1]
+    assert {k: done[k] for k in ("type", "files_total", "files_generated", "files_failed", "failed_files")} == {
         "type": "GENERATION_DONE", "files_total": 3, "files_generated": 3,
         "files_failed": 0, "failed_files": [],
     }
+    assert done["usage"] == {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0}  # stand-in stream reports none
+    assert done["run_id"]
     assert workspace.files["src/pages/Home.tsx"] == "home code"
     assert "import Reports from './pages/Reports';" in workspace.files["src/App.tsx"]
 
@@ -189,7 +199,7 @@ async def test_existing_file_is_left_untouched_when_its_regeneration_fails(db):
     with patch.object(ai_ide_generation, "ai_ide_service", new=workspace), \
          patch.object(ai_ide, "ai_ide_service", new=workspace), \
          patch.object(ai_ide_generation, "plan_files", new=AsyncMock(return_value=plan)), \
-         patch.object(ai_ide_generation, "stream_file", new=stream):
+         patch.object(ai_ide_generation, "verify_file", new=_accept_all), patch.object(ai_ide_generation, "stream_file", new=stream):
         await ai_ide.generate(ws, "ws-1")
     assert workspace.files["src/pages/Home.tsx"] == "previous content"
 
@@ -202,7 +212,7 @@ async def test_socket_uses_the_orgs_connector_settings_and_resets_them(db):
         seen["org_id"] = ai_service._current_org_id.get()
         yield "code"
 
-    async def plan_files(idea):
+    async def plan_files(idea, **kwargs):
         seen["planner_model"] = ai_service._ollama_cfg()[2]
         return {"files": [PLAN["files"][1]], "routes": []}
 
@@ -217,7 +227,7 @@ async def test_socket_uses_the_orgs_connector_settings_and_resets_them(db):
     with patch.object(ai_ide_generation, "ai_ide_service", new=fake), \
          patch.object(ai_ide, "ai_ide_service", new=fake), \
          patch.object(ai_ide_generation, "plan_files", new=plan_files), \
-         patch.object(ai_ide_generation, "stream_file", new=stream_file):
+         patch.object(ai_ide_generation, "verify_file", new=_accept_all), patch.object(ai_ide_generation, "stream_file", new=stream_file):
         await ai_ide.generate(ws, "ws-1")
 
     assert seen == {"model": "org-own-model", "org_id": org.id, "planner_model": "org-own-model"}
@@ -286,7 +296,9 @@ async def test_stream_error_reaches_the_caller_after_partial_tokens_and_usage_is
         await asyncio.sleep(0)
 
     assert tokens == ["import ", "x"]
-    logged.assert_awaited_once_with(generator._TASK_NAME, 0, 0)
+    logged.assert_awaited_once()
+    assert logged.await_args.args == (generator._TASK_NAME, 0, 0)
+    assert logged.await_args.kwargs["extra"]["path"] == "src/A.tsx"
 
 
 async def test_stream_error_before_any_token_reaches_the_caller():
@@ -340,7 +352,7 @@ async def test_plan_is_announced_before_any_file_and_lists_every_path(db):
     assert types.index("PLAN") < types.index("FILE_CREATE")
     plan = ws.of_type("PLAN")[0]
     assert plan["files"] == [f["path"] for f in PLAN["files"]]
-    assert plan["routes"] == PLAN["routes"]
+    assert [{k: r[k] for k in ("path", "component", "importPath")} for r in plan["routes"]] == PLAN["routes"]
 
 
 async def test_markdown_fences_are_stripped_before_the_file_is_saved(db):
@@ -451,7 +463,7 @@ async def _patched(workspace, plan, stream):
         patch.object(ai_ide_generation, "ai_ide_service", new=workspace),
         patch.object(ai_ide, "ai_ide_service", new=workspace),
         patch.object(ai_ide_generation, "plan_files", new=AsyncMock(return_value=plan)),
-        patch.object(ai_ide_generation, "stream_file", new=stream),
+        patch.object(ai_ide_generation, "verify_file", new=_accept_all), patch.object(ai_ide_generation, "stream_file", new=stream),
     )
 
 
@@ -474,7 +486,7 @@ async def test_run_continues_after_the_client_disconnects_and_attach_replays_it(
 
     workspace = FakeWorkspace()
     patches = await _patched(workspace, PLAN, stream_file)
-    with patches[0], patches[1], patches[2], patches[3]:
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
         first = DroppingSocket(create_session_cookie(user_id="user", org_id=org.id))
         await ai_ide.generate(first, "ws-1")
         assert first.of_type("PLAN") and first.of_type("FILE_CREATE")
@@ -509,7 +521,7 @@ async def test_attach_after_completion_replays_the_finished_run(db):
         "src/pages/Home.tsx": "home code",
         "src/pages/Reports.tsx": "reports code",
     }))
-    with patches[0], patches[1], patches[2], patches[3]:
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
         first = FakeWebSocket(create_session_cookie(user_id="user", org_id=org.id))
         await ai_ide.generate(first, "ws-1")
         second = FakeWebSocket(create_session_cookie(user_id="user", org_id=org.id), idea='{"attach": true}')
@@ -537,7 +549,7 @@ async def test_a_second_idea_while_a_run_is_going_follows_that_run(db):
     gate = asyncio.Event()
     calls: list[str] = []
 
-    async def plan_files(idea):
+    async def plan_files(idea, **kwargs):
         calls.append(idea)
         await gate.wait()
         return {"files": [PLAN["files"][1]], "routes": []}
@@ -547,7 +559,7 @@ async def test_a_second_idea_while_a_run_is_going_follows_that_run(db):
     with patch.object(ai_ide_generation, "ai_ide_service", new=workspace), \
          patch.object(ai_ide, "ai_ide_service", new=workspace), \
          patch.object(ai_ide_generation, "plan_files", new=plan_files), \
-         patch.object(ai_ide_generation, "stream_file", new=_stream({"src/pages/Home.tsx": "home"})):
+         patch.object(ai_ide_generation, "verify_file", new=_accept_all), patch.object(ai_ide_generation, "stream_file", new=_stream({"src/pages/Home.tsx": "home"})):
         class DroppingSocket(FakeWebSocket):
             async def send_json(self, message):
                 self.sent.append(message)
@@ -581,7 +593,7 @@ async def test_pages_are_prompted_with_the_shared_files_written_before_them(db):
     ws = FakeWebSocket(create_session_cookie(user_id="user", org_id=org.id))
     workspace = FakeWorkspace()
     ai_ide_generation.reset_for_tests()
-    with patch.object(ai_ide_generation, "ai_ide_service", new=workspace),          patch.object(ai_ide, "ai_ide_service", new=workspace),          patch.object(ai_ide_generation, "plan_files", new=AsyncMock(return_value=PLAN)),          patch.object(ai_ide_generation, "stream_file", new=stream_file):
+    with patch.object(ai_ide_generation, "ai_ide_service", new=workspace),          patch.object(ai_ide, "ai_ide_service", new=workspace),          patch.object(ai_ide_generation, "plan_files", new=AsyncMock(return_value=PLAN)),          patch.object(ai_ide_generation, "verify_file", new=_accept_all), patch.object(ai_ide_generation, "stream_file", new=stream_file):
         await ai_ide.generate(ws, "ws-1")
 
     assert seen["src/components/Navbar.tsx"] == {}

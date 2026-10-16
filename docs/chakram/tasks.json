@@ -4,123 +4,411 @@
   "updated": "2026-10-16",
   "tasks": [
     {
-      "id": "T-000", "phase": "0", "title": "Repository audit and baseline",
-      "depends_on": [], "acceptance": ["AUD 01", "AUD 02", "AUD 03", "AUD 04", "AUD 05", "AUD 06"],
+      "id": "T-000",
+      "phase": "0",
+      "title": "Repository audit and baseline",
+      "depends_on": [],
+      "acceptance": [
+        "AUD 01",
+        "AUD 02",
+        "AUD 03",
+        "AUD 04",
+        "AUD 05",
+        "AUD 06"
+      ],
       "status": "done",
-      "files": ["docs/chakram/audit/*", "docs/chakram/IMPLEMENTATION_PLAN.md", "docs/chakram/DECISIONS.md"],
+      "files": [
+        "docs/chakram/audit/*",
+        "docs/chakram/IMPLEMENTATION_PLAN.md",
+        "docs/chakram/DECISIONS.md"
+      ],
       "evidence": "docs/chakram/audit/BASELINE_CHECKS.md",
-      "constraints": ["No Mongo/LLM/browser in the audit container; runtime checks beyond pytest/vitest/tsc/build are Blocked"]
+      "constraints": [
+        "No Mongo/LLM/browser in the audit container; runtime checks beyond pytest/vitest/tsc/build are Blocked"
+      ]
     },
     {
-      "id": "T-001", "phase": "0", "title": "Redact test credentials from the repo-analysis LLM prompt (GAP-01)",
-      "depends_on": [], "acceptance": ["SEC 01"], "status": "todo",
-      "files": ["backend/app/services/ai_service.py", "backend/app/services/analysis_runner.py", "backend/tests/"],
-      "expected": "Prompt contains {{TEST_EMAIL}}/{{TEST_PASSWORD}} placeholders; values substituted only at execution; a test asserts the password never appears in the prompt"
+      "id": "T-001",
+      "phase": "0",
+      "title": "Redact test credentials from the repo-analysis LLM prompt (GAP-01)",
+      "depends_on": [],
+      "acceptance": [
+        "SEC 01"
+      ],
+      "status": "done",
+      "files": [
+        "backend/app/services/ai_service.py",
+        "backend/app/services/analysis_runner.py",
+        "backend/tests/"
+      ],
+      "expected": "Prompt contains {{TEST_EMAIL}}/{{TEST_PASSWORD}} placeholders; values substituted only at execution; a test asserts the password never appears in the prompt",
+      "evidence": "ai_service prompts carry {{TEST_EMAIL}}/{{TEST_PASSWORD}}; playwright_service substitutes at run time; a placeholder step with no account fails clearly. tests/test_credential_placeholders.py"
     },
     {
-      "id": "T-002", "phase": "0", "title": "Move GitHub PAT out of query string and localStorage (GAP-02)",
-      "depends_on": [], "acceptance": ["SEC 01"], "status": "todo",
-      "files": ["backend/app/routes/github.py", "frontend/src/pages/AiIde.tsx", "frontend/src/lib/api.ts"]
+      "id": "T-002",
+      "phase": "0",
+      "title": "Move GitHub PAT out of query string and localStorage (GAP-02)",
+      "depends_on": [],
+      "acceptance": [
+        "SEC 01"
+      ],
+      "status": "done",
+      "files": [
+        "backend/app/routes/github.py",
+        "frontend/src/pages/AiIde.tsx",
+        "frontend/src/lib/api.ts"
+      ],
+      "evidence": "PAT in ReviewCommitRequest body; App Studio token in sessionStorage. tests/test_security_repairs.py"
     },
     {
-      "id": "T-003", "phase": "0", "title": "Sidebar streamlining: tabs for test pages, parked pages behind connector status, Monitoring off the sidebar, Usage & Cost linked (ADR-5)",
-      "depends_on": [], "acceptance": ["OPS 01"], "status": "todo",
-      "files": ["frontend/src/lib/nav-config.ts", "frontend/src/components/AppSidebar.tsx", "frontend/src/pages/GeneratedTests.tsx"]
+      "id": "T-003",
+      "phase": "0",
+      "title": "Sidebar streamlining: tabs for test pages, parked pages behind connector status, Monitoring off the sidebar, Usage & Cost linked (ADR-5)",
+      "depends_on": [],
+      "acceptance": [
+        "OPS 01"
+      ],
+      "status": "done",
+      "files": [
+        "frontend/src/lib/nav-config.ts",
+        "frontend/src/components/AppSidebar.tsx",
+        "frontend/src/pages/GeneratedTests.tsx"
+      ],
+      "evidence": "nav-config.ts streamlined; TestSuiteTabs; parked items via connector status; Usage & Cost in footer. frontend/src/lib/nav-config.test.ts"
     },
     {
-      "id": "T-004", "phase": "0", "title": "Remove dead frontend code and unused packages (GAP-21)",
-      "depends_on": [], "acceptance": ["AUD 02"], "status": "todo",
-      "files": ["frontend/src/components/ui/*", "frontend/package.json", "frontend/src/lib/analytics-charts.ts", "frontend/src/index.css"]
+      "id": "T-004",
+      "phase": "0",
+      "title": "Remove dead frontend code and unused packages (GAP-21)",
+      "depends_on": [],
+      "acceptance": [
+        "AUD 02"
+      ],
+      "status": "todo",
+      "files": [
+        "frontend/src/components/ui/*",
+        "frontend/package.json",
+        "frontend/src/lib/analytics-charts.ts",
+        "frontend/src/index.css"
+      ]
     },
     {
-      "id": "T-010", "phase": "A", "title": "System/user prompt split with static reference first; complete() helper (ADR-4)",
-      "depends_on": ["T-000"], "acceptance": ["OPS 04"], "status": "todo",
-      "files": ["backend/app/services/ai_service.py", "backend/app/engines/generator.py", "backend/app/engines/planner.py"]
+      "id": "T-010",
+      "phase": "A",
+      "title": "System/user prompt split with static reference first; complete() helper (ADR-4)",
+      "depends_on": [
+        "T-000"
+      ],
+      "acceptance": [
+        "OPS 04"
+      ],
+      "status": "done",
+      "files": [
+        "backend/app/services/ai_service.py",
+        "backend/app/engines/generator.py",
+        "backend/app/engines/planner.py"
+      ],
+      "evidence": "ai_service._call_openai(system=, log_extra=, usage_sink=); generator sends one system message per role. tests/test_generation_verify_and_retry.py"
     },
     {
-      "id": "T-011", "phase": "A", "title": "Per-role kit sheets (page, data, component, charts) replacing the single KIT_API.md in prompts; data file gets no kit reference or marks",
-      "depends_on": ["T-010"], "acceptance": ["OPS 04"], "status": "todo",
-      "files": ["backend/app/templates/chronos_kit/sheets/*.md", "backend/app/engines/kit.py", "backend/app/engines/generator.py"],
-      "expected": "Same 5-page fixture app: prompt tokens <= 15K (was ~34K estimated)"
+      "id": "T-011",
+      "phase": "A",
+      "title": "Per-role kit sheets (page, data, component, charts) replacing the single KIT_API.md in prompts; data file gets no kit reference or marks",
+      "depends_on": [
+        "T-010"
+      ],
+      "acceptance": [
+        "OPS 04"
+      ],
+      "status": "done",
+      "files": [
+        "backend/app/templates/chronos_kit/sheets/*.md",
+        "backend/app/engines/kit.py",
+        "backend/app/engines/generator.py"
+      ],
+      "expected": "Same 5-page fixture app: prompt tokens <= 15K (was ~34K estimated)",
+      "evidence": "chronos_kit/sheets/{page,data,component,charts}.md; kit.kit_sheet/role_for/wants_charts; data file gets no kit reference or marks"
     },
     {
-      "id": "T-012", "phase": "A", "title": "Validate the plan (Pydantic AppPlan) with one repair call; reject bad page counts, routes, marks; single data rule (GAP-06)",
-      "depends_on": ["T-010"], "acceptance": ["HAR 02"], "status": "todo",
-      "files": ["backend/app/engines/planner.py", "backend/app/services/ai_ide_generation.py", "backend/tests/test_ai_ide_generation.py"]
+      "id": "T-012",
+      "phase": "A",
+      "title": "Validate the plan (Pydantic AppPlan) with one repair call; reject bad page counts, routes, marks; single data rule (GAP-06)",
+      "depends_on": [
+        "T-010"
+      ],
+      "acceptance": [
+        "HAR 02"
+      ],
+      "status": "done",
+      "files": [
+        "backend/app/engines/planner.py",
+        "backend/app/services/ai_ide_generation.py",
+        "backend/tests/test_ai_ide_generation.py"
+      ],
+      "evidence": "engines/plan_schema.py normalize_plan + PlanError; planner repair turn; MAX_IDEA_CHARS. tests/test_plan_schema.py"
     },
     {
-      "id": "T-013", "phase": "A", "title": "Server-side parse check before FILE_DONE and one retry on failure (GAP-06, GAP-20)",
-      "depends_on": ["T-012"], "acceptance": ["HAR 03", "HAR 04"], "status": "todo",
-      "files": ["backend/app/services/ai_ide_generation.py", "backend/app/engines/generator.py"]
+      "id": "T-013",
+      "phase": "A",
+      "title": "Server-side parse check before FILE_DONE and one retry on failure (GAP-06, GAP-20)",
+      "depends_on": [
+        "T-012"
+      ],
+      "acceptance": [
+        "HAR 03",
+        "HAR 04"
+      ],
+      "status": "done",
+      "files": [
+        "backend/app/services/ai_ide_generation.py",
+        "backend/app/engines/generator.py"
+      ],
+      "evidence": "engines/verify.py structural check; FILE_ATTEMPTS=2 with previous_problems; hard problems reject, soft ones warn. tests/test_verify.py"
     },
     {
-      "id": "T-014", "phase": "A", "title": "Usage log carries workspace_id, run_id, path; GENERATION_DONE totals; await the log task (GAP-14, GAP-15)",
-      "depends_on": ["T-010"], "acceptance": ["MOD 10", "OPS 04"], "status": "todo",
-      "files": ["backend/app/services/ai_service.py", "backend/app/engines/generator.py", "backend/app/services/ai_ide_generation.py"]
+      "id": "T-014",
+      "phase": "A",
+      "title": "Usage log carries workspace_id, run_id, path; GENERATION_DONE totals; await the log task (GAP-14, GAP-15)",
+      "depends_on": [
+        "T-010"
+      ],
+      "acceptance": [
+        "MOD 10",
+        "OPS 04"
+      ],
+      "status": "done",
+      "files": [
+        "backend/app/services/ai_service.py",
+        "backend/app/engines/generator.py",
+        "backend/app/services/ai_ide_generation.py"
+      ],
+      "evidence": "run_id/usage on GenerationRun; GENERATION_DONE carries usage+warnings+run_id; log rows carry workspace_id/run_id/path; ContextVar reset bug fixed"
     },
     {
-      "id": "T-015", "phase": "A", "title": "KIT_API drift test and single dependency source (GAP-07)",
-      "depends_on": [], "acceptance": ["MOD 11"], "status": "todo",
-      "files": ["backend/tests/test_kit_reference.py", "backend/app/services/template_service.py", "frontend/src/components/ai-ide/preview-runtime.js"]
+      "id": "T-015",
+      "phase": "A",
+      "title": "KIT_API drift test and single dependency source (GAP-07)",
+      "depends_on": [],
+      "acceptance": [
+        "MOD 11"
+      ],
+      "status": "done",
+      "files": [
+        "backend/tests/test_kit_reference.py",
+        "backend/app/services/template_service.py",
+        "frontend/src/components/ai-ide/preview-runtime.js"
+      ],
+      "evidence": "tests/test_kit_reference.py; package.json rendered from TEMPLATE_DEPENDENCIES; KIT_API.md drift fixed"
     },
     {
-      "id": "T-020", "phase": "D1", "title": "Extract the chronos design pack; kit reads tokens only (fonts, sidebar width, radius to variables); apps get src/design/",
-      "depends_on": ["T-015"], "acceptance": ["OPS 02"], "status": "todo",
-      "files": ["backend/app/templates/design_packs/chronos/*", "backend/app/templates/chronos_kit/src/chronos/tokens.css", "backend/app/templates/chronos_kit/src/chronos/app-shell.tsx", "backend/app/engines/kit.py"]
+      "id": "T-020",
+      "phase": "D1",
+      "title": "Extract the chronos design pack; kit reads tokens only (fonts, sidebar width, radius to variables); apps get src/design/",
+      "depends_on": [
+        "T-015"
+      ],
+      "acceptance": [
+        "OPS 02"
+      ],
+      "status": "todo",
+      "files": [
+        "backend/app/templates/design_packs/chronos/*",
+        "backend/app/templates/chronos_kit/src/chronos/tokens.css",
+        "backend/app/templates/chronos_kit/src/chronos/app-shell.tsx",
+        "backend/app/engines/kit.py"
+      ]
     },
     {
-      "id": "T-021", "phase": "D1", "title": "Pack validator (token completeness, contrast, fonts, logo) and upload + org default (design_packs collection, Settings UI)",
-      "depends_on": ["T-020"], "acceptance": ["OPS 02"], "status": "todo",
-      "files": ["backend/app/services/design_pack_service.py", "backend/app/routes/design_packs.py", "frontend/src/pages/ConnectorsSettings.tsx"]
+      "id": "T-021",
+      "phase": "D1",
+      "title": "Pack validator (token completeness, contrast, fonts, logo) and upload + org default (design_packs collection, Settings UI)",
+      "depends_on": [
+        "T-020"
+      ],
+      "acceptance": [
+        "OPS 02"
+      ],
+      "status": "todo",
+      "files": [
+        "backend/app/services/design_pack_service.py",
+        "backend/app/routes/design_packs.py",
+        "frontend/src/pages/ConnectorsSettings.tsx"
+      ]
     },
     {
-      "id": "T-022", "phase": "D1", "title": "Theme editor writes a delta over the pack; planner receives pack README; test pack ('acme') generates an app that uses it; kit upgrade leaves src/design intact",
-      "depends_on": ["T-021"], "acceptance": ["OPS 02"], "status": "todo",
-      "files": ["frontend/src/components/ai-ide/ThemeEditor.tsx", "frontend/src/lib/theme-engine.ts", "backend/tests/test_design_packs.py"]
+      "id": "T-022",
+      "phase": "D1",
+      "title": "Theme editor writes a delta over the pack; planner receives pack README; test pack ('acme') generates an app that uses it; kit upgrade leaves src/design intact",
+      "depends_on": [
+        "T-021"
+      ],
+      "acceptance": [
+        "OPS 02"
+      ],
+      "status": "todo",
+      "files": [
+        "frontend/src/components/ai-ide/ThemeEditor.tsx",
+        "frontend/src/lib/theme-engine.ts",
+        "backend/tests/test_design_packs.py"
+      ]
     },
     {
-      "id": "T-030", "phase": "D2", "title": "Chakram frontend adopts kit token names and loads the org pack (GAP-09, GAP-24)",
-      "depends_on": ["T-020"], "acceptance": ["OPS 02"], "status": "todo",
-      "files": ["frontend/tailwind.config.ts", "frontend/src/styles/*", "frontend/src/pages/*", "frontend/src/components/*"]
+      "id": "T-030",
+      "phase": "D2",
+      "title": "Chakram frontend adopts kit token names and loads the org pack (GAP-09, GAP-24)",
+      "depends_on": [
+        "T-020"
+      ],
+      "acceptance": [
+        "OPS 02"
+      ],
+      "status": "todo",
+      "files": [
+        "frontend/tailwind.config.ts",
+        "frontend/src/styles/*",
+        "frontend/src/pages/*",
+        "frontend/src/components/*"
+      ]
     },
     {
-      "id": "T-040", "phase": "B", "title": "app.spec.json schema (entities, pages, 12 block types) and planner that emits it",
-      "depends_on": ["T-012"], "acceptance": ["HAR 01"], "status": "todo",
-      "files": ["backend/app/engines/spec.py", "backend/app/engines/planner.py"]
+      "id": "T-040",
+      "phase": "B",
+      "title": "app.spec.json schema (entities, pages, 12 block types) and planner that emits it",
+      "depends_on": [
+        "T-012"
+      ],
+      "acceptance": [
+        "HAR 01"
+      ],
+      "status": "todo",
+      "files": [
+        "backend/app/engines/spec.py",
+        "backend/app/engines/planner.py"
+      ]
     },
     {
-      "id": "T-041", "phase": "B", "title": "Composer renders pages, data, routes and nav from the spec; golden test compiles output with tsc",
-      "depends_on": ["T-040"], "acceptance": ["REL 02"], "status": "todo",
-      "files": ["backend/app/engines/composer/*", "backend/tests/test_composer_golden.py"]
+      "id": "T-041",
+      "phase": "B",
+      "title": "Composer renders pages, data, routes and nav from the spec; golden test compiles output with tsc",
+      "depends_on": [
+        "T-040"
+      ],
+      "acceptance": [
+        "REL 02"
+      ],
+      "status": "todo",
+      "files": [
+        "backend/app/engines/composer/*",
+        "backend/tests/test_composer_golden.py"
+      ]
     },
     {
-      "id": "T-042", "phase": "B", "title": "custom blocks via the model; spec-aware visual edit; flag AI_IDE_COMPOSER",
-      "depends_on": ["T-041"], "acceptance": ["OPS 01"], "status": "todo",
-      "files": ["backend/app/services/ai_ide_generation.py", "frontend/src/lib/source-edit.ts"]
+      "id": "T-042",
+      "phase": "B",
+      "title": "custom blocks via the model; spec-aware visual edit; flag AI_IDE_COMPOSER",
+      "depends_on": [
+        "T-041"
+      ],
+      "acceptance": [
+        "OPS 01"
+      ],
+      "status": "todo",
+      "files": [
+        "backend/app/services/ai_ide_generation.py",
+        "frontend/src/lib/source-edit.ts"
+      ]
     },
     {
-      "id": "T-050", "phase": "K", "title": "Kit controls: Button, IconButton, TextField, Textarea, Checkbox, Switch, Tabs, Dialog, Drawer, Toast, FormRow, Breadcrumbs, Skeleton",
-      "depends_on": ["T-020"], "acceptance": ["OPS 02"], "status": "todo",
-      "files": ["backend/app/templates/chronos_kit/src/chronos/*"]
+      "id": "T-050",
+      "phase": "K",
+      "title": "Kit controls: Button, IconButton, TextField, Textarea, Checkbox, Switch, Tabs, Dialog, Drawer, Toast, FormRow, Breadcrumbs, Skeleton",
+      "depends_on": [
+        "T-020"
+      ],
+      "acceptance": [
+        "OPS 02"
+      ],
+      "status": "todo",
+      "files": [
+        "backend/app/templates/chronos_kit/src/chronos/*"
+      ]
     },
     {
-      "id": "T-060", "phase": "C", "title": "API kit from entities (ADR-3): zod schemas, CRUD routes with org scope and roles, migrations, typed client hooks, seed loader, in-browser store for preview",
-      "depends_on": ["T-041"], "acceptance": ["BE 01", "BE 02", "BE 03", "BE 04", "BE 05", "REL 04"], "status": "todo",
-      "files": ["backend/app/templates/api_kit/*", "backend/app/engines/composer/api.py"]
+      "id": "T-060",
+      "phase": "C",
+      "title": "API kit from entities (ADR-3): zod schemas, CRUD routes with org scope and roles, migrations, typed client hooks, seed loader, in-browser store for preview",
+      "depends_on": [
+        "T-041"
+      ],
+      "acceptance": [
+        "BE 01",
+        "BE 02",
+        "BE 03",
+        "BE 04",
+        "BE 05",
+        "REL 04"
+      ],
+      "status": "todo",
+      "files": [
+        "backend/app/templates/api_kit/*",
+        "backend/app/engines/composer/api.py"
+      ]
     },
     {
-      "id": "T-070", "phase": "V", "title": "Spec-derived test cases; built app registered as a Test Execution target; results linked to the workspace",
-      "depends_on": ["T-041", "T-060"], "acceptance": ["REL 01", "REL 03"], "status": "todo",
-      "files": ["backend/app/services/test_case_service.py", "backend/app/services/execution_service.py", "backend/app/routes/ai_ide.py"]
+      "id": "T-070",
+      "phase": "V",
+      "title": "Spec-derived test cases; built app registered as a Test Execution target; results linked to the workspace",
+      "depends_on": [
+        "T-041",
+        "T-060"
+      ],
+      "acceptance": [
+        "REL 01",
+        "REL 03"
+      ],
+      "status": "todo",
+      "files": [
+        "backend/app/services/test_case_service.py",
+        "backend/app/services/execution_service.py",
+        "backend/app/routes/ai_ide.py"
+      ]
     },
     {
-      "id": "T-071", "phase": "V", "title": "One TestCase/TestRun shape across both execution engines; Root Cause and Test Repair see Test Execution failures (GAP-10, GAP-16); Pipeline report reads stored results (GAP-13)",
-      "depends_on": ["T-003"], "acceptance": ["REL 02", "REL 03"], "status": "todo",
-      "files": ["backend/app/services/root_cause_service.py", "backend/app/routes/healing.py", "backend/app/routes/pipeline.py"]
+      "id": "T-071",
+      "phase": "V",
+      "title": "One TestCase/TestRun shape across both execution engines; Root Cause and Test Repair see Test Execution failures (GAP-10, GAP-16); Pipeline report reads stored results (GAP-13)",
+      "depends_on": [
+        "T-003"
+      ],
+      "acceptance": [
+        "REL 02",
+        "REL 03"
+      ],
+      "status": "todo",
+      "files": [
+        "backend/app/services/root_cause_service.py",
+        "backend/app/routes/healing.py",
+        "backend/app/routes/pipeline.py"
+      ]
     },
     {
-      "id": "T-080", "phase": "H", "title": "Blueprint harness: durable runs, leases, cancel, sandboxed runtime, manifest, preview revision, Azure and Gemini adapters (CHK 03-08, 13)",
-      "depends_on": ["T-010"], "acceptance": ["HAR 05", "HAR 06", "HAR 07", "PRE 01", "PRE 02", "MOD 01", "MOD 02", "MOD 03"], "status": "todo",
+      "id": "T-080",
+      "phase": "H",
+      "title": "Blueprint harness: durable runs, leases, cancel, sandboxed runtime, manifest, preview revision, Azure and Gemini adapters (CHK 03-08, 13)",
+      "depends_on": [
+        "T-010"
+      ],
+      "acceptance": [
+        "HAR 05",
+        "HAR 06",
+        "HAR 07",
+        "PRE 01",
+        "PRE 02",
+        "MOD 01",
+        "MOD 02",
+        "MOD 03"
+      ],
+      "status": "todo",
       "files": []
     }
   ]

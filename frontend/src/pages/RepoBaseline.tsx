@@ -44,6 +44,7 @@ import {
 } from "@/lib/api";
 import { PageShell } from "@/components/PageShell";
 import { PageHeader } from "@/components/PageHeader";
+import { TestSuiteTabs } from "@/components/TestSuiteTabs";
 import { StatusBadge, type StatusTone } from "@/components/imcc/StatusBadge";
 
 const eyebrow = "font-sans text-[11px] font-medium uppercase tracking-[0.08em] text-ink-quaternary";
@@ -743,6 +744,7 @@ export default function RepoBaseline() {
           title="Test Baseline"
           description="The repository is being analysed. Tests appear here when the scan finishes."
         />
+        <TestSuiteTabs />
         <ScanProgressView
           sessionId={activeSession.sessionId}
           repoId={activeSession.repoId}
@@ -826,6 +828,7 @@ export default function RepoBaseline() {
               </>
             }
           />
+          <TestSuiteTabs />
           <a
             href={repoData.github_url}
             target="_blank"
@@ -980,6 +983,7 @@ export default function RepoBaseline() {
         title="Test Baseline"
         description="Submit a GitHub repository URL. The codebase is analysed and categorised Playwright tests are generated from it. Submitting the same repository again detects what changed and appends only the new tests."
       />
+      <TestSuiteTabs />
       <div className="space-y-4">
         {/* Form card */}
         <div className="rounded-lg border border-stroke-muted bg-container p-4 space-y-4">

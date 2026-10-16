@@ -77,38 +77,126 @@ def _role_rules(path: str, component_name: str, mark: str) -> str:
 
 # With the Chronos kit, a page composes ready-made components, so the model writes far
 # less code per file (fewer output tokens, faster builds) and every app has the same look.
-_KIT_FILE_PROMPT = """\
-Write ONE file of a React 18 + TypeScript app (Vite, Tailwind v3, react-router-dom v6, recharts, lucide-react).
+#
+# The prompt is split in two. The SYSTEM message is the same for every file of a
+# given role (role line, kit sheet, style rules), so a provider that caches prompt
+# prefixes reuses it across the files of a build. The USER message carries only
+# what differs per file: path, purpose, routes, shared code, icons, and the
+# problems of a previous attempt when this is a retry.
+_KIT_SYSTEM = """\
+You are an elite React 18 + TypeScript engineer writing ONE file of a Vite app (Tailwind v3,
+react-router-dom v6, recharts, lucide-react). The app is wrapped in the Chronos kit's AppShell
+(sidebar + top bar), so a page renders only its content. Build the UI from the kit; never re-create
+what it provides.
 
+Output rules:
+- Output only the file's code: no markdown fences, no explanations, no commentary. Start with an import.
+- Import kit pieces from '../chronos' (or '../../chronos' from deeper folders). Import shared data only
+  from the files listed in the request, with their exact exported names. Never import a page from a page.
+- Style with the kit's semantic classes only (bg-container, text-primary, border-muted, ...). No gradients,
+  glassmorphism, drop shadows, framer-motion, palette classes (bg-blue-500), hex or rgb() colours.
+- Responsive by construction: KpiTiles in <KpiGrid>, cards in <Grid>, two-up in <SplitRow>. Never a bare
+  `grid-cols-N` without `sm:`/`lg:` prefixes, never fixed pixel widths on content. Keep KPI values short and
+  pre-formatted; long text gets `truncate` or `line-clamp-2`.
+- Interactions must work (search, filters, tabs with useState). No TODOs, no placeholder text, no "use client".
+- Keep it compact: at most ~140 lines.
+
+{sheets}
+"""
+
+_KIT_USER = """\
 File: {path}
 Purpose: {description}
 App: {app_name}
 Page icon (3D mark id): {mark}
 Routes: {routes}
 {context_block}
-The app is wrapped in the Chronos kit's AppShell (sidebar + top bar), so a page renders ONLY its content.
-Build the UI from the kit; do not re-create what it provides.
-
-Chronos kit reference:
-{kit_api}
-
-3D icons available to <Mark id="..." />:
-{marks}
-
-RULES:
-- Output only the file's code: no markdown fences, no explanations. Start with an import.
 {role_rules}
-- Import kit pieces from '../chronos' (or '../../chronos' from deeper folders). Import shared data only from
-  files listed above, with their exact exported names.
-- Style with the kit's semantic classes (bg-container, text-primary, border-muted, ...). No gradients,
-  glassmorphism, drop shadows, framer-motion or custom colour palettes.
-- Responsive by construction: rows of KpiTile go in <KpiGrid>, collections of cards/panels in <Grid>,
-  two-up sections in <SplitRow>. Never a bare `grid-cols-N` without `sm:`/`lg:` prefixes, never fixed
-  pixel widths on content. Keep KPI values short and pre-formatted (usdCompact for large money, 1 decimal
-  for percentages); long text gets `truncate` or `line-clamp-2`.
-- Keep it compact: at most ~140 lines; mock data of 5-12 realistic rows, defined at module scope.
-- Interactions must work (search, filters, tabs with useState). No TODOs, no placeholder text.
-"""
+{data_rule}
+{marks_block}
+{retry_block}"""
+
+_DATA_RULE_PAGE = (
+    "- Data: import it from the shared data module(s) above and only display it. If a value the page needs "
+    "is missing there, derive it in the page with a small pure helper; do not define new datasets."
+)
+_DATA_RULE_DATA = "- This module owns ALL the app's mock data: every page will import from it."
+_DATA_RULE_COMPONENT = "- Data arrives through props; define no datasets here."
+
+
+def _role_rules(path: str, component_name: str, mark: str) -> str:
+    """What this kind of file must contain: a page, a data module or a small component."""
+    if path.startswith("src/pages/"):
+        return (
+            f"- This is a PAGE: `export default function {component_name}()` taking no props. Return\n"
+            f"  <PageBody> starting with <PageHeader title=... description=... "
+            f'mark={{<Mark id="{mark}" size={{44}} />}} />, then the content.'
+        )
+    if path.endswith(".ts"):
+        return (
+            "- This is a DATA module (.ts): export TypeScript types and typed constant arrays/objects of mock data,\n"
+            "  plus small pure helper functions if useful. NO JSX, NO React imports, NO components, no default export."
+        )
+    return (
+        f"- This is a shared COMPONENT: `export default function {component_name}(props)` with a typed props\n"
+        "  interface; small and reusable. Do not render PageHeader/PageBody or any layout."
+    )
+
+
+def _data_rule(role: str) -> str:
+    return {"page": _DATA_RULE_PAGE, "data": _DATA_RULE_DATA}.get(role, _DATA_RULE_COMPONENT)
+
+
+def _retry_block(file_spec: dict) -> str:
+    problems = file_spec.get("previous_problems")
+    if not problems:
+        return ""
+    if isinstance(problems, str):
+        problems = [problems]
+    lines = "\n".join(f"  - {p}" for p in problems)
+    return (
+        "\nThe previous attempt at this file was rejected for these reasons; write the whole file again "
+        f"and avoid them:\n{lines}\n"
+    )
+
+
+def kit_messages(file_spec: dict) -> tuple[str, str]:
+    """(system, user) messages for a kit app file."""
+    path = file_spec["path"]
+    role = kit.role_for(path)
+    component_name = file_spec.get("component_name") or "Page"
+    mark = file_spec.get("mark") or "mark-command"
+    description = file_spec.get("description", "")
+    sheets = [kit.kit_sheet(role)]
+    if role == "page" and kit.wants_charts(description):
+        sheets.append(kit.kit_sheet("charts"))
+    system = _KIT_SYSTEM.format(sheets="\n\n".join(s for s in sheets if s) or "(kit reference unavailable)")
+
+    routes_text = ", ".join(
+        f"{r.get('path')} -> {r.get('component')}" for r in file_spec.get("routes", []) if isinstance(r, dict)
+    ) or "none planned"
+    if role == "page":
+        # The planned icon plus the icons closest to this page's purpose.
+        catalog = kit.marks_catalog(
+            " ".join(str(file_spec.get(k) or "") for k in ("mark", "description", "component_name", "app_name")), 20
+        )
+        marks_block = f"3D icons available to <Mark id=\"...\" />:\n{catalog or '(none)'}\n"
+    else:
+        marks_block = ""
+    user = _KIT_USER.format(
+        path=path,
+        description=description,
+        app_name=file_spec.get("app_name", "App"),
+        mark=mark if role == "page" else "n/a",
+        routes=routes_text,
+        context_block=_context_block(file_spec.get("context_files") or {}),
+        role_rules=_role_rules(path, component_name, mark),
+        data_rule=_data_rule(role),
+        marks_block=marks_block,
+        retry_block=_retry_block(file_spec),
+    )
+    return system, user
+
 
 _FENCED_BLOCK = re.compile(r"```[a-zA-Z0-9_-]*[ \t]*\r?\n(.*?)\r?\n?```", re.DOTALL)
 
@@ -134,16 +222,20 @@ def strip_code_fences(text: str) -> str:
 _strip_code_fences = strip_code_fences
 
 
-def _schedule_usage_log(org_id: str | None, prompt_tokens: int, completion_tokens: int) -> None:
-    """Fire-and-forget usage log through ai_service's cost logger."""
+def _schedule_usage_log(
+    org_id: str | None, prompt_tokens: int, completion_tokens: int, extra: dict | None = None
+) -> None:
+    """Fire-and-forget usage log through ai_service's cost logger.
+
+    The task runs in its own copy of the context, so the org is set there and
+    never reset: resetting a ContextVar token from a different context raised
+    ValueError when the loop shut down with the task still pending.
+    """
 
     async def _log() -> None:
-        token = ai_service.set_current_org_id(org_id) if org_id else None
-        try:
-            await ai_service._log_cost(_TASK_NAME, prompt_tokens, completion_tokens)
-        finally:
-            if token is not None:
-                ai_service.reset_current_org_id(token)
+        if org_id:
+            ai_service.set_current_org_id(org_id)
+        await ai_service._log_cost(_TASK_NAME, prompt_tokens, completion_tokens, extra=extra)
 
     try:
         asyncio.get_running_loop().create_task(_log())
@@ -160,6 +252,39 @@ _CONTEXT_FILE_CHARS = 5000
 _CONTEXT_TOTAL_CHARS = 14000
 
 
+def _export_summary(content: str, limit: int) -> str:
+    """The exported names and shapes of a file that is too long to inline whole.
+
+    Each `export` line is kept with the first lines of its body, so a page sees
+    every type and dataset it can import (a hard cut would hide the later ones).
+    """
+    lines = content.splitlines()
+    out: list[str] = []
+    i = 0
+    while i < len(lines) and sum(len(l) + 1 for l in out) < limit:
+        line = lines[i]
+        if re.match(r"\s*export\s", line):
+            out.append(line)
+            opened = line.count("{") + line.count("[") - line.count("}") - line.count("]")
+            j = i + 1
+            kept = 0
+            while j < len(lines) and opened > 0 and kept < 8:
+                out.append(lines[j])
+                opened += lines[j].count("{") + lines[j].count("[") - lines[j].count("}") - lines[j].count("]")
+                kept += 1
+                j += 1
+            if opened > 0:
+                out.append("  // … more rows of the same shape")
+                while j < len(lines) and opened > 0:
+                    opened += lines[j].count("{") + lines[j].count("[") - lines[j].count("}") - lines[j].count("]")
+                    j += 1
+                out.append(lines[j - 1] if j - 1 < len(lines) else "")
+            i = j
+            continue
+        i += 1
+    return "\n".join(out)
+
+
 def _context_block(context_files: dict) -> str:
     if not isinstance(context_files, dict) or not context_files:
         return ""
@@ -168,7 +293,10 @@ def _context_block(context_files: dict) -> str:
     for path, content in context_files.items():
         if not isinstance(content, str) or not content.strip():
             continue
-        body = content if len(content) <= _CONTEXT_FILE_CHARS else content[:_CONTEXT_FILE_CHARS] + "\n// ... truncated"
+        if len(content) <= _CONTEXT_FILE_CHARS:
+            body = content
+        else:
+            body = "// exports only (file shortened):\n" + _export_summary(content, _CONTEXT_FILE_CHARS)
         if used + len(body) > _CONTEXT_TOTAL_CHARS:
             break
         used += len(body)
@@ -189,34 +317,30 @@ async def stream_file(file_spec: dict, org_id: str | None = None) -> AsyncGenera
     attributes the log entry when the caller runs outside request scope (the
     websocket handler); without it the request-scoped org is used.
 
+    `file_spec` may carry `usage_sink`, a callable `(prompt_tokens,
+    completion_tokens)` the run uses to total a build, and `log_extra`, a dict
+    merged into the usage log row (workspace id, run id, path).
+
     A provider error is raised to the caller once the tokens received before
     it have been yielded.
     """
-    routes_text = ", ".join(
-        f"{r.get('path')} -> {r.get('component')}" for r in file_spec.get("routes", []) if isinstance(r, dict)
-    ) or "none planned"
     if kit.has_kit():
-        prompt = _KIT_FILE_PROMPT.format(
-            path=file_spec["path"],
-            component_name=file_spec.get("component_name") or "Page",
-            description=file_spec.get("description", ""),
-            app_name=file_spec.get("app_name", "App"),
-            mark=file_spec.get("mark") or "mark-command",
-            role_rules=_role_rules(
-                file_spec["path"], file_spec.get("component_name") or "Page", file_spec.get("mark") or "mark-command"
-            ),
-            routes=routes_text,
-            context_block=_context_block(file_spec.get("context_files") or {}),
-            kit_api=kit.kit_api() or "(see src/chronos/index.ts)",
-            # The planned icon plus the icons closest to this page's purpose.
-            marks=kit.marks_catalog(
-                " ".join(str(file_spec.get(k) or "") for k in ("mark", "description", "component_name", "app_name")), 30
-            ) or "(none)",
-        )
+        system, user = kit_messages(file_spec)
     else:
-        prompt = _legacy_prompt(file_spec, routes_text)
-    async for token in _stream_prompt(prompt, file_spec, org_id):
+        routes_text = ", ".join(
+            f"{r.get('path')} -> {r.get('component')}" for r in file_spec.get("routes", []) if isinstance(r, dict)
+        ) or "none planned"
+        system, user = _LEGACY_SYSTEM, _legacy_prompt(file_spec, routes_text)
+    async for token in _stream_messages(system, user, file_spec, org_id):
         yield token
+
+
+_LEGACY_SYSTEM = (
+    "You are an elite React/TypeScript UI engineer. "
+    "Output raw TypeScript/TSX code ONLY. "
+    "Absolutely no markdown fences, no backticks, no explanations, no comments about what you are doing. "
+    "Start directly with the import statement."
+)
 
 
 def _legacy_prompt(file_spec: dict, routes_text: str) -> str:
@@ -233,7 +357,7 @@ def _legacy_prompt(file_spec: dict, routes_text: str) -> str:
     )
 
 
-async def _stream_prompt(prompt: str, file_spec: dict, org_id: str | None) -> AsyncGenerator[str, None]:
+async def _stream_messages(system: str, user: str, file_spec: dict, org_id: str | None) -> AsyncGenerator[str, None]:
     queue: asyncio.Queue[str | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
     error_holder: list[Exception] = []
@@ -249,16 +373,8 @@ async def _stream_prompt(prompt: str, file_spec: dict, org_id: str | None) -> As
             stream = client.chat.completions.create(
                 model=model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are an elite React/TypeScript UI engineer. "
-                            "Output raw TypeScript/TSX code ONLY. "
-                            "Absolutely no markdown fences, no backticks, no explanations, no comments about what you are doing. "
-                            "Start directly with the import statement."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
                 ],
                 stream=True,
                 stream_options={"include_usage": True},
@@ -298,4 +414,12 @@ async def _stream_prompt(prompt: str, file_spec: dict, org_id: str | None) -> As
     finally:
         # Runs on completion, error and cancellation (caller timeout), so every
         # call is logged; tokens are zero when usage never arrived.
-        _schedule_usage_log(org_id, usage_holder[0], usage_holder[1])
+        sink = file_spec.get("usage_sink")
+        if callable(sink):
+            try:
+                sink(usage_holder[0], usage_holder[1])
+            except Exception:  # noqa: BLE001 - totals must never break a stream
+                logger.exception("[Generator] usage sink failed")
+        extra = dict(file_spec.get("log_extra") or {})
+        extra.setdefault("path", file_spec.get("path"))
+        _schedule_usage_log(org_id, usage_holder[0], usage_holder[1], extra)

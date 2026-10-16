@@ -191,7 +191,7 @@ async def test_concurrent_llm_calls_are_bounded_by_the_setting(monkeypatch):
     lock = threading.Lock()
     state = {"active": 0, "peak": 0}
 
-    def fake_sync(prompt, json_mode=True, timeout=None):
+    def fake_sync(prompt, json_mode=True, timeout=None, system=None):
         with lock:
             state["active"] += 1
             state["peak"] = max(state["peak"], state["active"])
@@ -213,7 +213,7 @@ async def test_call_openai_goes_through_the_bound_and_still_logs_usage(monkeypat
     state = {"active": 0, "peak": 0}
     logged: list[tuple] = []
 
-    def fake_sync(prompt, json_mode=True, timeout=None):
+    def fake_sync(prompt, json_mode=True, timeout=None, system=None):
         with lock:
             state["active"] += 1
             state["peak"] = max(state["peak"], state["active"])
@@ -222,7 +222,7 @@ async def test_call_openai_goes_through_the_bound_and_still_logs_usage(monkeypat
             state["active"] -= 1
         return "text", 5, 7
 
-    async def fake_log(task_name, prompt_tokens, completion_tokens):
+    async def fake_log(task_name, prompt_tokens, completion_tokens, extra=None):
         logged.append((task_name, prompt_tokens, completion_tokens))
 
     monkeypatch.setattr(ai_service, "_call_openai_sync", fake_sync)
@@ -239,7 +239,7 @@ async def test_a_failed_call_releases_its_slot(monkeypatch):
     monkeypatch.setattr(settings, "LLM_MAX_CONCURRENCY", 1)
     calls = {"n": 0}
 
-    def fake_sync(prompt, json_mode=True, timeout=None):
+    def fake_sync(prompt, json_mode=True, timeout=None, system=None):
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("boom")

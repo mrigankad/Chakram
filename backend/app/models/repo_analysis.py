@@ -26,6 +26,17 @@ class RepoAnalysisRequest(BaseModel):
     mode: str = "full"              # "full" | "commit"
     commit_sha: Optional[str] = None    # selected commit SHA (commit mode only)
     commit_message: Optional[str] = None
+    # Skip TLS certificate verification on the target-URL pre-flight (self-signed
+    # staging hosts). Off by default; logged when used.
+    allow_insecure_tls: bool = False
+
+
+class ExecuteRequest(BaseModel):
+    """Optional body of POST /repo/analyses/{id}/execute: the test account that fills
+    the {{TEST_EMAIL}} / {{TEST_PASSWORD}} placeholders at run time (never stored)."""
+    test_email: Optional[str] = None
+    test_password: Optional[str] = None
+    allow_insecure_tls: bool = False
 
 
 class PageInfo(BaseModel):

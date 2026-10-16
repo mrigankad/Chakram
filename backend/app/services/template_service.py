@@ -6,6 +6,7 @@ project. A template stored in MongoDB (collection `Templates`) overrides files o
 the same path; files it does not define are filled in from the default so a
 generated app always builds and deploys.
 """
+import json
 import logging
 from typing import Dict
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
@@ -49,6 +50,25 @@ TEMPLATE_DEPENDENCIES: Dict[str, str] = {
     "@radix-ui/react-dropdown-menu": "^2.1.4",
     "@radix-ui/react-tabs": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.6",
+}
+
+_PACKAGE_JSON_BASE: Dict[str, object] = {
+    "name": "ai-generated-app",
+    "private": True,
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {"dev": "vite", "build": "vite build", "preview": "vite preview"},
+    "dependencies": TEMPLATE_DEPENDENCIES,
+    "devDependencies": {
+        "@types/react": "^18.3.12",
+        "@types/react-dom": "^18.3.1",
+        "@vitejs/plugin-react": "^4.3.1",
+        "tailwindcss": "^3.4.17",
+        "autoprefixer": "^10.4.21",
+        "postcss": "^8.5.6",
+        "vite": "^5.4.19",
+        "typescript": "^5.8.3",
+    },
 }
 
 _BASE_TEMPLATE: Dict[str, str] = {
@@ -213,46 +233,10 @@ dist
 *.log
 .DS_Store
 """,
-    "package.json": """\
-{
-  "name": "ai-generated-app",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.30.1",
-    "recharts": "^2.15.0",
-    "lucide-react": "^0.462.0",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.6.0",
-    "framer-motion": "^11.15.0",
-    "@tanstack/react-query": "^5.62.0",
-    "date-fns": "^3.6.0",
-    "@radix-ui/react-dialog": "^1.1.4",
-    "@radix-ui/react-dropdown-menu": "^2.1.4",
-    "@radix-ui/react-tabs": "^1.1.2",
-    "@radix-ui/react-tooltip": "^1.1.6"
-  },
-  "devDependencies": {
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.1",
-    "tailwindcss": "^3.4.17",
-    "autoprefixer": "^10.4.21",
-    "postcss": "^8.5.6",
-    "vite": "^5.4.19",
-    "typescript": "^5.8.3"
-  }
+    # package.json is rendered from TEMPLATE_DEPENDENCIES below so the prompt,
+    # the preview's pinned versions and the installed packages cannot drift.
 }
-""",
-}
+_BASE_TEMPLATE["package.json"] = json.dumps(_PACKAGE_JSON_BASE, indent=2) + "\n"
 
 
 # ── Chronos kit variant ──────────────────────────────────────────────────────
